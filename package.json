@@ -1,0 +1,9 @@
+{
+  "name": "aprovacoes-all-toral",
+  "private": true,
+  "type": "module",
+  "description": "App de aprovação de posts e anúncios da ALL TORAL",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.1"
+  }
+}
