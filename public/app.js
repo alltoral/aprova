@@ -24,7 +24,7 @@ const OBJETIVOS = ["Reconhecimento","Tráfego","Engajamento","Cadastros (leads)"
 const CTAS = ["Saiba mais","Comprar agora","Enviar mensagem","Cadastre-se","Fale conosco","Reservar","Pedir agora","Ver cardápio"];
 
 const S = {
-  mode:"home", token:null, clientId:null, pass:null, loginErr:"",
+  mode:"home", setup:null, token:null, clientId:null, pass:null, loginErr:"",
   ready:false, loadErr:"", isOwner:false, canReview:true,
   client:null, clientList:[], posts:[],
   tab:"all", filter:"all",
@@ -100,6 +100,13 @@ function render(){
   main.setAttribute("style", client?brandVars(client):"");
 }
 function loginPage(){
+  if(S.setup===null)return msg("Carregando","Abrindo o painel","");
+  if(S.setup)return bar()+`<div class="wrap center-msg"><form class="login" data-setup><p class="eyebrow">Primeiro acesso</p><h1>Crie a senha do painel</h1>
+    <p class="hint">Só você vai usar essa senha para entrar no painel do estúdio. Guarde bem.</p>
+    <label class="field"><span>Nova senha</span><input type="password" id="pass" autocomplete="new-password" minlength="6" required></label>
+    <label class="field"><span>Repita a senha</span><input type="password" id="pass2" autocomplete="new-password" minlength="6" required></label>
+    ${S.loginErr?`<p class="err">${esc(S.loginErr)}</p>`:""}
+    <button class="btn pri" type="submit" ${S.busy?"disabled":""}>${S.busy?"Salvando…":"Criar senha e entrar"}</button></form></div>`+foot();
   return bar()+`<div class="wrap center-msg"><form class="login" data-login><p class="eyebrow">Área do estúdio</p><h1>Entrar no painel</h1>
     <label class="field"><span>Senha do estúdio</span><input type="password" id="pass" autocomplete="current-password" required></label>
     ${S.loginErr?`<p class="err">${esc(S.loginErr)}</p>`:""}
@@ -556,10 +563,16 @@ document.addEventListener("change",ev=>{
 async function copy(text,msg){try{await navigator.clipboard.writeText(text);toast(msg)}catch(e){toast("Selecione o texto e copie manualmente")}}
 
 document.addEventListener("submit",async ev=>{
-  const f=ev.target.closest("[data-login]");if(!f)return;ev.preventDefault();
-  const p=$("#pass").value;if(!p)return;
+  const f=ev.target.closest("[data-login],[data-setup]");if(!f)return;ev.preventDefault();
+  const p=$("#pass").value, p2=$("#pass2")?.value;if(!p)return;
   S.busy=true;S.loginErr="";render();
   S.pass=p;
+  if(f.matches("[data-setup]")){
+    if(p.length<6){S.pass=null;S.busy=false;S.loginErr="Use uma senha com pelo menos 6 caracteres.";render();return}
+    if(p!==p2){S.pass=null;S.busy=false;S.loginErr="As duas senhas não são iguais.";render();return}
+    try{await api("/api/admin/setup",{method:"POST",body:{password:p},login:true});S.setup=false}
+    catch(e){S.pass=null;S.busy=false;S.loginErr=e.message;render();return}
+  }
   try{await api("/api/admin/login",{method:"POST",login:true});store.set("aprov_admin",p);S.busy=false;load()}
   catch(e){S.pass=null;S.busy=false;S.loginErr=e.message;render();$("#pass")?.focus()}
 });
@@ -585,7 +598,9 @@ document.addEventListener("touchend",ev=>{if(swX==null)return;const dx=ev.change
 let rsz;window.addEventListener("resize",()=>{clearTimeout(rsz);rsz=setTimeout(()=>{if(S.open&&!S.editor&&!S.flying&&document.activeElement?.tagName!=="TEXTAREA"&&document.activeElement?.tagName!=="INPUT")renderSheet()},200)});
 async function load(quiet){
   if(S.mode==="home"){S.ready=true;render();return}
-  if(S.mode==="admin"&&!S.pass){render();return}
+  if(S.mode==="admin"&&!S.pass){
+    if(S.setup==null){S.setup=null;render();try{const r=await (await fetch("/api/admin/status")).json();S.setup=!r.configured}catch(e){S.setup=false}}
+    render();return}
   if(!quiet){S.ready=false;S.loadErr="";render()}
   try{
     if(S.mode==="client"){const r=await api(`/api/c/${S.token}`);S.client=r.client;S.posts=r.posts;document.title=r.client.name+" · Aprova All Toral"}

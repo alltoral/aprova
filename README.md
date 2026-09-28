@@ -14,8 +14,7 @@ Roda no **Cloudflare** (plano grátis): o servidor é um Worker e os dados, arte
 2. **Crie o banco:** no menu, **Storage & databases → D1 SQL database → Create database**. Nome: `aprova`. Depois de criar, copie o **Database ID**.
 3. **Cole o ID:** no GitHub, abra o arquivo `wrangler.toml`, troque `COLE_AQUI_O_DATABASE_ID` pelo ID copiado e salve (Commit changes).
 4. **Conecte o repositório:** no Cloudflare, **Workers & Pages → Create → Import a repository**, conecte o GitHub e escolha o repositório `aprova`. Deixe as configurações como vierem (o comando de deploy é `npx wrangler deploy`) e clique em **Deploy**.
-5. **Crie a senha do painel:** abra o Worker `aprova-alltoral` → **Settings → Variables and Secrets → Add**. Tipo **Secret**, nome `ADMIN_PASSWORD`, valor = sua senha. Salve.
-6. **Pronto:** acesse `https://aprova-alltoral.<seu-subdominio>.workers.dev/admin` e entre com a senha. O endereço aparece no topo da página do Worker.
+5. **Crie a senha do painel:** acesse `https://aprova.<seu-subdominio>.workers.dev/admin`. No primeiro acesso aparece a tela **Crie a senha do painel**. Defina a senha e pronto, você já entra. Nos próximos acessos ela é pedida para entrar.
 
 A partir daí, toda alteração enviada ao GitHub é publicada sozinha. A senha e o banco continuam intactos entre publicações.
 

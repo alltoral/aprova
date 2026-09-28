@@ -26,6 +26,19 @@ const safeId = (s) => typeof s === "string" && /^[a-z0-9]{4,40}$/.test(s);
 const str = (v, max = 4000) => (typeof v === "string" ? v.slice(0, max) : "");
 const now = () => new Date().toISOString();
 
+const okCache = new Set();
+async function hashPass(pw, salt) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 10000 }, key, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+async function checkPass(pw, saved) {
+  const k = saved.hash + "|" + pw;
+  if (okCache.has(k)) return true;
+  const ok = sameText(await hashPass(pw, saved.salt), saved.hash);
+  if (ok) okCache.add(k);
+  return ok;
+}
 function sameText(a, b) {
   const x = new TextEncoder().encode(String(a));
   const y = new TextEncoder().encode(String(b));
@@ -245,10 +258,23 @@ async function handle(req, env) {
 
     /* ---------- área do estúdio: exige a senha ---------- */
     if (parts[0] === "admin") {
-      const pass = env.ADMIN_PASSWORD;
-      if (!pass) return fail("Defina o segredo ADMIN_PASSWORD no Cloudflare para liberar o painel.", 500);
+      /* senha do painel: a do Cloudflare (ADMIN_PASSWORD), se existir; senão, a criada no primeiro acesso */
+      const saved = env.ADMIN_PASSWORD ? null : await db.get("cfg/admin", { type: "json" });
+      const configured = !!env.ADMIN_PASSWORD || !!saved;
+      if (parts[1] === "status" && method === "GET") return json({ configured });
+      if (parts[1] === "setup" && method === "POST") {
+        if (configured) return fail("A senha do painel já foi criada.", 409);
+        const body = await readBody(req);
+        const pw = typeof body.password === "string" ? body.password : "";
+        if (pw.length < 6) return fail("Use uma senha com pelo menos 6 caracteres.");
+        const salt = rid(16);
+        await db.setJSON("cfg/admin", { salt, hash: await hashPass(pw, salt), createdAt: now() });
+        return json({ ok: true });
+      }
+      if (!configured) return fail("Crie a senha do painel para começar.", 428);
       const given = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-      if (!given || !sameText(given, pass)) return fail("Senha incorreta", 401);
+      const valid = !!given && (env.ADMIN_PASSWORD ? sameText(given, env.ADMIN_PASSWORD) : await checkPass(given, saved));
+      if (!valid) return fail("Senha incorreta", 401);
       const [, a, b, c, d, e] = parts;
 
       if (a === "login") return json({ ok: true });
