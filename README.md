@@ -1,50 +1,60 @@
 # Aprova All Toral
 
-App para os clientes aprovarem posts e anúncios com os stickers do Larot.
+Central de aprovação de posts e anúncios da ALL TORAL, com os stickers do Larot.
 
-- **Painel do estúdio** (`/admin`): protegido por senha. Você cadastra clientes (nome, @, segmento, cor e logo), sobe as artes com legenda e, nos anúncios, a segmentação.
-- **Página do cliente** (`/c/<link-secreto>`): cada cliente recebe um link próprio que abre só a página dele. Ele toca no sticker e o status muda na hora. Em "Precisa de ajustes" abre a caixa de comentário.
-- A separação é feita no servidor: um link nunca devolve dados de outro cliente. Se precisar cortar o acesso, use "gere um link novo" na página do cliente, e o link antigo para de funcionar.
+- **Painel do estúdio** (`/admin`): protegido por senha. Você cadastra clientes (nome, @, redes, cor e logo), sobe artes, vídeos e capas, legenda e, nos anúncios, a segmentação.
+- **Página do cliente** (`/c/<link-secreto>`): cada cliente recebe um link que abre só a página dele. Ele toca no sticker e o status muda na hora. Em "Precisa de ajustes" abre a caixa de comentário.
+- A separação é feita no servidor: um link nunca devolve dados de outro cliente. Para cortar o acesso, use "gere um link novo" na página do cliente.
 
-## Como publicar (Netlify)
+Roda no **Cloudflare** (plano grátis): o servidor é um Worker e os dados, artes e vídeos ficam num banco D1.
 
-1. Suba esta pasta para um repositório no GitHub.
-2. No Netlify: **Add new site → Import an existing project** e escolha o repositório. As configurações de build já vêm do `netlify.toml`, não precisa mudar nada.
-3. Em **Site configuration → Environment variables**, crie `ADMIN_PASSWORD` com a senha do painel.
-4. Faça o deploy de novo (Deploys → Trigger deploy) para a senha valer.
-5. Acesse `https://seu-site.netlify.app/admin` e entre com a senha.
+## Como publicar (uma vez só)
 
-Os dados e as imagens ficam guardados no Netlify Blobs do próprio site. Não precisa de banco de dados externo.
+1. **Crie a conta** grátis em [dash.cloudflare.com](https://dash.cloudflare.com).
+2. **Crie o banco:** no menu, **Storage & databases → D1 SQL database → Create database**. Nome: `aprova`. Depois de criar, copie o **Database ID**.
+3. **Cole o ID:** no GitHub, abra o arquivo `wrangler.toml`, troque `COLE_AQUI_O_DATABASE_ID` pelo ID copiado e salve (Commit changes).
+4. **Conecte o repositório:** no Cloudflare, **Workers & Pages → Create → Import a repository**, conecte o GitHub e escolha o repositório `aprova`. Deixe as configurações como vierem (o comando de deploy é `npx wrangler deploy`) e clique em **Deploy**.
+5. **Crie a senha do painel:** abra o Worker `aprova-alltoral` → **Settings → Variables and Secrets → Add**. Tipo **Secret**, nome `ADMIN_PASSWORD`, valor = sua senha. Salve.
+6. **Pronto:** acesse `https://aprova-alltoral.<seu-subdominio>.workers.dev/admin` e entre com a senha. O endereço aparece no topo da página do Worker.
+
+A partir daí, toda alteração enviada ao GitHub é publicada sozinha. A senha e o banco continuam intactos entre publicações.
 
 ## Uso no dia a dia
 
-1. No painel, clique em **Novo cliente**, preencha e salve. Depois envie o logo.
-2. Clique em **+ Nova peça**: tipo (Instagram ou Anúncio), formato, artes, legenda, hashtags e, se for anúncio, a segmentação.
-3. **Salvar rascunho** deixa a peça escondida do cliente. **Enviar para o cliente** publica.
-4. Clique em **Copiar link do cliente** e mande para ele.
-5. Quando o cliente pedir ajuste, edite a peça e use **Enviar nova versão para aprovação**.
+1. No painel, clique em **Novo cliente**, marque as redes que o estúdio cuida e salve. Depois envie o logo.
+2. **+ Nova peça**: rede, orgânico ou anúncio pago, formato, artes ou vídeo (com capa), legenda e, se for anúncio, a segmentação.
+3. **Salvar rascunho** deixa escondido do cliente. **Enviar para o cliente** publica.
+4. **Copiar link do cliente** e mande para ele.
+5. Quando pedirem ajuste, edite a peça e use **Enviar nova versão para aprovação**.
 
 ## Limites
 
-- Cada arquivo pode ter até 5,5 MB. Imagens maiores são reduzidas automaticamente antes do envio. Vídeos precisam estar abaixo desse tamanho.
+- Arquivos de até 200 MB (vídeos são enviados em partes). Imagens grandes são reduzidas antes do envio.
 - Até 10 artes por peça.
+- Plano grátis do Cloudflare: 100 mil acessos por dia e 5 GB no banco D1 (artes e vídeos incluídos). Se um dia encher, apague clientes antigos ou migre os arquivos para o R2.
+
+## Instalar como app
+
+- **Computador (Chrome ou Edge):** ícone de instalar na barra de endereço, ou menu ⋮ → "Instalar Aprova All Toral".
+- **iPhone:** Safari → Compartilhar → "Adicionar à Tela de Início".
+- **Android:** Chrome → menu ⋮ → "Instalar app".
+
+O app instalado abre direto na última página usada.
 
 ## Estrutura
 
 ```
-public/            página (index.html, app.js, style.css, stickers, logo)
-netlify/functions/ api.mjs: toda a lógica do servidor
-netlify.toml       rotas e configuração
+public/          páginas, estilos, stickers e ícones
+worker/index.js  servidor: senha, links dos clientes, banco e arquivos
+wrangler.toml    configuração do Cloudflare
 ```
 
 Para trocar os stickers, substitua os PNG em `public/stickers/` mantendo os nomes (`aprovado.png`, `alteracao.png`, `reprovado.png`).
 
-## Instalar como app
+## Testar no computador (opcional)
 
-O site já vem pronto para ser instalado (PWA):
-
-- **Computador (Chrome ou Edge):** abra o painel e clique no ícone de instalar na barra de endereço, ou no menu ⋮ → "Instalar Aprova All Toral". Ele vira um app com ícone do Larot, abre em janela própria e fica no Dock ou menu Iniciar.
-- **iPhone:** no Safari, Compartilhar → "Adicionar à Tela de Início".
-- **Android:** no Chrome, menu ⋮ → "Instalar app".
-
-O app instalado abre direto na última página usada: o painel para você, a página dele para o cliente.
+```
+npm install
+echo "ADMIN_PASSWORD=teste" > .dev.vars
+npm run dev
+```

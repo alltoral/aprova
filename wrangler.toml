@@ -1,0 +1,21 @@
+# Aprova All Toral · Cloudflare Workers
+name = "aprova-alltoral"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+# Páginas, estilos, stickers e ícones
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Banco de dados (clientes, peças, aprovações, artes e vídeos)
+# Crie o banco "aprova" no painel do Cloudflare e cole o Database ID abaixo.
+[[d1_databases]]
+binding = "DB"
+database_name = "aprova"
+database_id = "COLE_AQUI_O_DATABASE_ID"
+
+[observability]
+enabled = true

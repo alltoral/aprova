@@ -1,9 +1,13 @@
 {
-  "name": "aprovacoes-all-toral",
+  "name": "aprova-alltoral",
   "private": true,
   "type": "module",
-  "description": "App de aprovação de posts e anúncios da ALL TORAL",
-  "dependencies": {
-    "@netlify/blobs": "^11.1.1"
+  "description": "Aprova All Toral: central de aprovação de posts e anúncios",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
   }
 }
