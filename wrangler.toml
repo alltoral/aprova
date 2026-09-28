@@ -1,5 +1,5 @@
 # Aprova All Toral · Cloudflare Workers
-name = "aprova-alltoral"
+name = "aprova"
 main = "worker/index.js"
 compatibility_date = "2025-09-01"
 
