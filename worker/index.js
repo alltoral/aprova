@@ -3,7 +3,7 @@
 const STATUSES = ["pendente", "aprovado", "alteracao", "reprovado"];
 const CHUNK = 1900000; /* cada parte enviada ao servidor (limite de 2 MB por linha do D1) */
 const MAX_FILE = 200 * 1024 * 1024; /* limite por arquivo (vídeos) */
-const NETWORKS = ["instagram", "facebook", "tiktok", "linkedin", "youtube", "pinterest", "x"];
+const NETWORKS = ["instagram", "facebook", "tiktok", "linkedin", "youtube", "pinterest", "x", "whatsapp"];
 const FORMATS = ["4x5", "1x1", "9x16", "16x9"];
 const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml", "video/mp4", "video/quicktime"];
 

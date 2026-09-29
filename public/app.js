@@ -8,7 +8,7 @@ const ST = {
   reprovado: {label:"Repensar", long:"Repensar a ideia", color:"#ff5a5f", ink:"#ffffff", word:"REPROVADO", sub:"REFAZER PEÇA"}
 };
 const DECISIONS = ["aprovado","alteracao","reprovado"];
-const NETS = {instagram:"Instagram",facebook:"Facebook",tiktok:"TikTok",linkedin:"LinkedIn",youtube:"YouTube",pinterest:"Pinterest",x:"X"};
+const NETS = {instagram:"Instagram",facebook:"Facebook",tiktok:"TikTok",linkedin:"LinkedIn",youtube:"YouTube",pinterest:"Pinterest",x:"X",whatsapp:"WhatsApp"};
 const netOf = p => p.network || (p.kind==="ads"||p.kind==="instagram"?"instagram":"instagram");
 const isAd = p => p.sponsored===true || p.kind==="ads";
 const isVideo = m => (m?.type||"").startsWith("video/");
