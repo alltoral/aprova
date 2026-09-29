@@ -12,6 +12,9 @@ const NETS = {instagram:"Instagram",facebook:"Facebook",tiktok:"TikTok",linkedin
 const netOf = p => p.network || (p.kind==="ads"||p.kind==="instagram"?"instagram":"instagram");
 const isAd = p => p.sponsored===true || p.kind==="ads";
 const isVideo = m => (m?.type||"").startsWith("video/");
+// Vídeo + imagem na mesma peça: o vídeo é o Reels e a imagem vira a capa
+function fixReel(p){const m=p.media||[];const v=m.find(isVideo);if(!v||m.length<2)return p;const im=m.find(x=>!isVideo(x));p.cover=p.cover||im||null;p.media=[v];return p}
+const vidLabel = p => ["instagram","facebook"].includes(netOf(p))?"Reels":"Vídeo";
 const MOB = () => matchMedia("(max-width:760px)").matches;
 const clientNets = c => (c?.networks&&c.networks.length?c.networks:["instagram"]);
 const FORMATS = {
@@ -190,7 +193,7 @@ function postCard(p){
       ${imgs.length>1?`<span class="multi">1/${imgs.length}</span>`:""}${isVideo(imgs[0])?`<span class="play" aria-hidden="true"></span>`:""}</div>
       ${st!=="pendente"?`<div class="sticker">${sticker(st)}</div>`:""}</div>
     <div class="pmeta">
-      <div class="row-badges"><span class="badge">${NETS[netOf(p)]}</span>${isVideo(imgs[0])?`<span class="badge">${p.format==="9x16"?"Reels":"Vídeo"}</span>`:imgs.length>1?`<span class="badge">Carrossel</span>`:""}${isAd(p)?`<span class="badge ads">Anúncio</span>`:""}${p.visible===false?`<span class="badge draft">Rascunho</span>`:""}
+      <div class="row-badges"><span class="badge">${NETS[netOf(p)]}</span>${isVideo(imgs[0])?`<span class="badge">${vidLabel(p)}</span>`:imgs.length>1?`<span class="badge">Carrossel</span>`:""}${isAd(p)?`<span class="badge ads">Anúncio</span>`:""}${p.visible===false?`<span class="badge draft">Rascunho</span>`:""}
       <span class="pill" style="padding:0;color:${st==="pendente"?"var(--muted)":st==="alteracao"?"#8a6d00":ST[st].color}"><i class="dot" style="background:${ST[st].color}"></i>${ST[st].label}</span></div>
       <div class="t">${esc(p.title||"Peça sem título")}</div>
       <div class="d"><span>${esc(fmtDate(p.date))}</span>${nComments(p.id)?`<span class="cm">${nComments(p.id)} ${nComments(p.id)===1?"comentário":"comentários"}</span>`:""}</div>
@@ -304,7 +307,7 @@ function commentBox(){return S.commentOpen?`<div class="commentbox">
     <label class="field"><span>Seu nome</span><input type="text" id="who" value="${esc(S.who)}" placeholder="Quem está pedindo o ajuste" autocomplete="name"></label>
     <div class="actions"><button class="btn brand" data-act="submit-comment" ${S.busy?"disabled":""}>Enviar comentário</button>${MOB()?`<button class="btn ghost" data-act="close-comment">Depois</button>`:""}</div></div>`:""}
 function nameOf(h){return h.byLabel||"Cliente"}
-function applyPost(post){const i=S.posts.findIndex(x=>x.id===post.id);if(i>=0)S.posts[i]=post;else S.posts.push(post)}
+function applyPost(post){fixReel(post);const i=S.posts.findIndex(x=>x.id===post.id);if(i>=0)S.posts[i]=post;else S.posts.push(post)}
 async function submitReview(status){
   const p=S.posts.find(x=>x.id===S.open); if(!p||S.busy)return;
   const prev=JSON.parse(JSON.stringify(p.review||{status:"pendente",history:[]}));
@@ -445,7 +448,7 @@ async function uploadFiles(files){
   if(!list.length){S.editor.err="O limite é de 10 artes por peça.";renderSheet();return}
   S.editor.uploading=true;S.editor.err="";renderSheet();
   for(const file of list){
-    try{const r=await uploadOne(file,pc=>{if(S.editor){S.editor.progress=pc;renderSheet()}});S.editor.progress=0;S.editor.data.media=[...(S.editor.data.media||[]),{id:r.id,type:r.type}]}
+    try{const r=await uploadOne(file,pc=>{if(S.editor){S.editor.progress=pc;renderSheet()}});S.editor.progress=0;S.editor.data.media=[...(S.editor.data.media||[]),{id:r.id,type:r.type}];fixReel(S.editor.data)}
     catch(e){S.editor.err=e.message}
     if(S.editor)renderSheet();
   }
@@ -453,7 +456,7 @@ async function uploadFiles(files){
 }
 async function savePost(visible){
   const e=S.editor; if(!e||S.busy)return;
-  const d=JSON.parse(JSON.stringify(e.data)); d.visible=visible;
+  const d=fixReel(JSON.parse(JSON.stringify(e.data))); d.visible=visible;
   S.busy=true;renderSheet();
   try{
     const r=e.id?await api(`/api/admin/clients/${S.clientId}/posts/${e.id}`,{method:"PUT",body:d}):await api(`/api/admin/clients/${S.clientId}/posts`,{method:"POST",body:d});
@@ -603,8 +606,8 @@ async function load(quiet){
     render();return}
   if(!quiet){S.ready=false;S.loadErr="";render()}
   try{
-    if(S.mode==="client"){const r=await api(`/api/c/${S.token}`);S.client=r.client;S.posts=r.posts;document.title=r.client.name+" · Aprova All Toral"}
-    else if(S.clientId){const r=await api(`/api/admin/clients/${S.clientId}`);S.client=r.client;S.posts=r.posts;document.title=r.client.name+" · Aprova All Toral"}
+    if(S.mode==="client"){const r=await api(`/api/c/${S.token}`);S.client=r.client;S.posts=r.posts.map(fixReel);document.title=r.client.name+" · Aprova All Toral"}
+    else if(S.clientId){const r=await api(`/api/admin/clients/${S.clientId}`);S.client=r.client;S.posts=r.posts.map(fixReel);document.title=r.client.name+" · Aprova All Toral"}
     else{const r=await api("/api/admin/clients");S.clientList=r.clients;document.title="Aprova All Toral"}
     S.loadErr="";
   }catch(e){if(!quiet)S.loadErr=e.message}
