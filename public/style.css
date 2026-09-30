@@ -346,3 +346,4 @@ textarea:focus,input:focus,select:focus{border-color:var(--pink);outline:none;bo
 #main{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 #main>.foot{margin-top:auto}
 #main>*:nth-last-child(2){margin-bottom:72px}
+.bar-brand.is-link{cursor:pointer}
