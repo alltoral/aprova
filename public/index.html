@@ -26,6 +26,13 @@
 <div id="sheet" class="sheet" hidden></div>
 <div id="toast" class="toast" hidden role="status"></div>
 <script src="/app.js"></script>
-<script>if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));</script>
+<script>
+if("serviceWorker" in navigator){
+  /* quando sai versão nova, o app troca sozinho e recarrega uma vez */
+  let had=!!navigator.serviceWorker.controller, done=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(had&&!done&&document.getElementById("sheet")?.hidden!==false){done=true;location.reload()}had=true});
+  addEventListener("load",()=>navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).then(r=>{setInterval(()=>r.update().catch(()=>{}),5*60*1000);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")r.update().catch(()=>{})})}).catch(()=>{}));
+}
+</script>
 </body>
 </html>
