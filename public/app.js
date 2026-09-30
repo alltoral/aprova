@@ -140,11 +140,11 @@ function adminHome(){
       <div class="body"><div class="name">${esc(c.name)}${c.counts?.pedidos?` <span class="req-badge">${c.counts.pedidos} ${c.counts.pedidos===1?"pedido novo":"pedidos novos"}</span>`:""}</div>
       <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span>${c.counts?.ajustado?`<span><b>${c.counts.ajustado}</b> ajustados</span>`:""}${c.counts?.publicado?`<span><b>${c.counts.publicado}</b> publicados</span>`:""}</div></div>
     </button>`).join("");
-  return bar()+`<main class="wrap">
+  return bar()+`<div class="hero-band"><main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
     <p>Cada cliente tem um link secreto que abre só a página dele, com posts, anúncios, legenda, segmentação e comentários.</p>
     <p><button class="btn pri" data-act="brief-link">Enviar link de briefing</button> <span class="hint">o cliente abre e já cai no formulário para pedir um conteúdo</span></p></section>
-    </main><div class="band"><div class="wrap"><span><b>${tot.pendente}</b>aguardando</span><span><b>${tot.aprovado}</b>aprovados</span><span><b>${tot.alteracao}</b>com ajustes</span><span><b>${tot.reprovado}</b>para repensar</span></div></div><main class="wrap">
+    </main></div><div class="band"><div class="wrap"><span><b>${tot.pendente}</b>aguardando</span><span><b>${tot.aprovado}</b>aprovados</span><span><b>${tot.alteracao}</b>com ajustes</span><span><b>${tot.reprovado}</b>para repensar</span></div></div><main class="wrap">
     <div class="section-h"><h2>Seus <em>clientes</em></h2><div class="actions"><span class="eyebrow">${list.length} ${list.length===1?"cliente":"clientes"}</span><button class="link" data-act="logout">Sair</button></div></div>
     <div class="clients" style="padding-bottom:48px">${cards}<button class="ccard new" data-act="new-client"><span class="plus">+</span><span>Novo cliente</span></button></div>
   </main>`+foot();
