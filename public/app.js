@@ -5,8 +5,10 @@ const ST = {
   pendente:  {label:"Aguardando", long:"Aguardando aprovação", color:"#8d8792", ink:"#ffffff"},
   aprovado:  {label:"Aprovado", long:"Aprovado", color:"#35d07f", ink:"#08170e", word:"APROVADO", sub:"PODE POSTAR"},
   alteracao: {label:"Ajustes", long:"Precisa de ajustes", color:"#fae204", ink:"#161300", word:"AJUSTAR", sub:"PRECISA DE ALTERAÇÃO"},
-  reprovado: {label:"Repensar", long:"Repensar a ideia", color:"#ff5a5f", ink:"#ffffff", word:"REPROVADO", sub:"REFAZER PEÇA"}
+  reprovado: {label:"Repensar", long:"Repensar a ideia", color:"#ff5a5f", ink:"#ffffff", word:"REPROVADO", sub:"REFAZER PEÇA"},
+  ajustado:  {label:"Ajustado", long:"Conteúdo ajustado", color:"#e55496", ink:"#ffffff"}
 };
+const hasStk = st => DECISIONS.includes(st);
 const DECISIONS = ["aprovado","alteracao","reprovado"];
 const NETS = {instagram:"Instagram",facebook:"Facebook",tiktok:"TikTok",linkedin:"LinkedIn",youtube:"YouTube",pinterest:"Pinterest",x:"X",whatsapp:"WhatsApp"};
 const netOf = p => p.network || (p.kind==="ads"||p.kind==="instagram"?"instagram":"instagram");
@@ -79,7 +81,7 @@ function visiblePosts(){
   return S.posts.filter(p=>S.isOwner || p.visible!==false)
     .sort((a,b)=>String(a.date||"9999").localeCompare(String(b.date||"9999")) || String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
 }
-function counts(list){const c={pendente:0,aprovado:0,alteracao:0,reprovado:0};list.forEach(p=>c[statusOf(p.id)]++);return c}
+function counts(list){const c={pendente:0,aprovado:0,alteracao:0,reprovado:0,ajustado:0};list.forEach(p=>c[statusOf(p.id)]++);return c}
 
 /* ---------- render principal ---------- */
 function msg(eyebrow,title,text,extra=""){return bar()+`<div class="wrap center-msg"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1>${text?`<p style="color:var(--muted)">${text}</p>`:""}${extra}</div></div>`+foot()}
@@ -119,8 +121,8 @@ const ASSET="/";
 function pendingCount(){
   if(!S.ready||S.loadErr)return null;
   if(S.mode==="admin"&&!S.pass)return null;
-  if(S.mode==="admin"&&!S.clientId)return S.clientList.reduce((t,c)=>t+(c.counts?.pendente||0),0);
-  if(S.client)return counts(visiblePosts()).pendente;
+  if(S.mode==="admin"&&!S.clientId)return S.clientList.reduce((t,c)=>t+(c.counts?.pendente||0)+(c.counts?.ajustado||0),0);
+  if(S.client){const n=counts(visiblePosts());return n.pendente+n.ajustado}
   return null;
 }
 function bar(){
@@ -132,11 +134,11 @@ function foot(){return `<footer class="foot"><div class="wrap">${LOGO}<span>Est�
 
 function adminHome(){
   const list=S.clientList;
-  const tot={pendente:0,aprovado:0,alteracao:0,reprovado:0};list.forEach(c=>Object.keys(tot).forEach(k=>tot[k]+=c.counts?.[k]||0));
+  const tot={pendente:0,aprovado:0,alteracao:0,reprovado:0,ajustado:0};list.forEach(c=>Object.keys(tot).forEach(k=>tot[k]+=c.counts?.[k]||0));
   const cards=list.map(c=>`<button class="ccard" data-act="go" data-id="${c.id}">
       <div class="sw" style="background:${esc(c.color||"#e55496")};color:${inkFor(c.color||"#e55496")}">${avatar(c)}<div class="eyebrow" style="color:inherit;opacity:.8">${esc(c.nicho||"Cliente")}</div></div>
       <div class="body"><div class="name">${esc(c.name)}</div>
-      <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span></div></div>
+      <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span>${c.counts?.ajustado?`<span><b>${c.counts.ajustado}</b> ajustados</span>`:""}</div></div>
     </button>`).join("");
   return bar()+`<main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
@@ -169,13 +171,14 @@ function clientPage(c){
       <div class="stat"><b>${n.aprovado}</b><span>Aprovados</span></div>
       <div class="stat"><b>${n.alteracao}</b><span>Ajustes</span></div>
       <div class="stat"><b>${n.reprovado}</b><span>Repensar</span></div>
+      <div class="stat"><b>${n.ajustado}</b><span>Ajustados</span></div>
     </div>
   </div></section>
   <main class="wrap">
     ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed==="token"?"danger":""}" data-act="new-token">${S.armed==="token"?"confirmar: o link antigo para de funcionar":"gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`:""}
     <div class="tabs" role="tablist">${tab("all","Tudo",all.length)}${nets.filter(k=>S.isOwner||all.some(p=>netOf(p)===k)).map(k=>tab(k,NETS[k],all.filter(p=>netOf(p)===k).length)).join("")}${c.ads||adsN?tab("ads","Anúncios",adsN):""}</div>
-    <div class="filters">${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}</div>
+    <div class="filters">${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}</div>
     ${list.length?`<div class="grid">${list.map(postCard).join("")}</div>`:
       `<div class="emptybox"><h3>${all.length?"Nada neste filtro":"Nenhuma peça ainda"}</h3><p>${all.length?"Troque o filtro para ver as outras peças.":S.isOwner?"Suba a primeira arte com legenda e, se for anúncio, a segmentação.":"Assim que o estúdio enviar as peças, elas aparecem aqui para você aprovar."}</p>${S.isOwner&&!all.length?`<button class="btn pri" data-act="new-post">+ Nova peça</button>`:""}</div>`}
   </main>`+foot();
@@ -188,10 +191,10 @@ function mediaEl(m,alt,player,cover){
 }
 function postCard(p){
   const st=statusOf(p.id); const imgs=p.media||[];
-  return `<button class="pcard" data-act="open" data-id="${p.id}">
+  return `<button class="pcard st-${st}" data-act="open" data-id="${p.id}">
     <div class="thumb"><div class="clip">${p.cover&&isVideo(imgs[0])?`<img class="art" src="${blob(p.cover.id)}" alt="Capa de ${esc(p.title)}" loading="lazy">`:imgs[0]?mediaEl(imgs[0],p.title):`<div class="empty">Sem arte ainda</div>`}
       ${imgs.length>1?`<span class="multi">1/${imgs.length}</span>`:""}${isVideo(imgs[0])?`<span class="play" aria-hidden="true"></span>`:""}</div>
-      ${st!=="pendente"?`<div class="sticker">${sticker(st)}</div>`:""}</div>
+      ${hasStk(st)?`<div class="sticker">${sticker(st)}</div>`:""}</div>
     <div class="pmeta">
       <div class="row-badges"><span class="badge">${NETS[netOf(p)]}</span>${isVideo(imgs[0])?`<span class="badge">${vidLabel(p)}</span>`:imgs.length>1?`<span class="badge">Carrossel</span>`:""}${isAd(p)?`<span class="badge ads">Anúncio</span>`:""}${p.visible===false?`<span class="badge draft">Rascunho</span>`:""}
       <span class="pill" style="padding:0;color:${st==="pendente"?"var(--muted)":st==="alteracao"?"#8a6d00":ST[st].color}"><i class="dot" style="background:${ST[st].color}"></i>${ST[st].label}</span></div>
@@ -219,7 +222,7 @@ function currentClient(){return S.client}
 
 function igPreview(p,c){
   const media=p.media||[]; const i=Math.min(S.slide,Math.max(0,media.length-1));
-  const f=FORMATS[p.format||"4x5"]; const st=statusOf(p.id); const shownStk=S.pick||(st!=="pendente"?st:null);
+  const f=FORMATS[p.format||"4x5"]; const st=statusOf(p.id); const shownStk=S.pick||(hasStk(st)?st:null);
   const handle=(c.handle||c.name||"cliente").replace(/^@/,"");
   const cap=p.caption||""; const tags=p.hashtags||"";
   const full=cap+(tags?"\n\n"+tags:"");
@@ -279,6 +282,8 @@ function postSheet(p,c){
         <h3 id="rv">Sua <em>aprovação</em></h3>
         <div class="current"><span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span>${r&&r.at&&st!=="pendente"?`<span>por ${esc(nameOf(r))} · ${esc(fmtStamp(r.at))}</span>`:""}</div>
         ${r&&r.note&&st!=="pendente"?`<div class="studio-note" style="border-color:${ST[st].color}">${esc(r.note)}</div>`:""}
+        ${S.isOwner&&(st==="alteracao"||st==="reprovado")?`<div class="actions" style="margin-bottom:10px"><button class="btn pri" data-act="adjusted" data-id="${p.id}" ${S.busy?"disabled":""}>Marcar como conteúdo ajustado</button></div>`:""}
+        ${!S.isOwner&&st==="ajustado"?`<p class="adj-note">O estúdio ajustou esta peça. Confira e escolha o sticker de novo.</p>`:""}
         ${S.isOwner?`<p class="hint">Só o cliente escolhe o sticker. Para tirar, use o ✕ no canto dele.</p>
           <label class="field"><span>Responder</span><textarea id="note" placeholder="Escreva sua resposta para o cliente"></textarea></label>
           ${S.reviewErr?`<p class="err">${esc(S.reviewErr)}</p>`:""}
@@ -362,6 +367,11 @@ async function clearSticker(id){
   if(S.busy)return; S.busy=true;
   try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/clear`,{method:"POST"});applyPost(r.post);S.pick=null;render();renderSheet();toast("Sticker removido")}catch(e){toast(e.message)}
   S.busy=false;
+}
+async function markAdjusted(id){
+  if(S.busy)return; S.busy=true; renderSheet();
+  try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/adjusted`,{method:"POST"});applyPost(r.post);S.pick=null;render();toast("Marcado como conteúdo ajustado")}catch(e){toast(e.message)}
+  S.busy=false; renderSheet();
 }
 async function resend(id){
   try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/resend`,{method:"POST"});applyPost(r.post);render();renderSheet();toast("Peça reenviada para aprovação")}catch(e){toast(e.message)}
@@ -529,6 +539,7 @@ document.addEventListener("click",async ev=>{
     case "capmore": S.capMore=true; renderSheet(); break;
     case "pick": if(S.isOwner)break; if(statusOf(S.open)===b.dataset.s){if(b.dataset.s==="alteracao"){S.commentOpen=true;renderSheet();setTimeout(()=>$("#note")?.focus(),50)}else toast("Essa arte já está com esse sticker");break} placeSticker(b.dataset.s,b.querySelector(".mini")); break;
     case "clear-stk": clearSticker(b.dataset.id); break;
+    case "adjusted": markAdjusted(b.dataset.id); break;
     case "submit-comment": submitComment(); break;
     case "close-comment": S.commentOpen=false; renderSheet(); break;
     case "resend": resend(b.dataset.id); break;

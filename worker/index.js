@@ -1,6 +1,6 @@
 
 
-const STATUSES = ["pendente", "aprovado", "alteracao", "reprovado"];
+const STATUSES = ["pendente", "aprovado", "alteracao", "reprovado", "ajustado"];
 const CHUNK = 1900000; /* cada parte enviada ao servidor (limite de 2 MB por linha do D1) */
 const MAX_FILE = 200 * 1024 * 1024; /* limite por arquivo (vídeos) */
 const NETWORKS = ["instagram", "facebook", "tiktok", "linkedin", "youtube", "pinterest", "x", "whatsapp"];
@@ -285,7 +285,7 @@ async function handle(req, env) {
         const withCounts = await Promise.all(
           clients.map(async (cl) => {
             const posts = (await listJSON(db, `posts/${cl.id}/`)).filter((p) => p.visible !== false);
-            const counts = { pendente: 0, aprovado: 0, alteracao: 0, reprovado: 0 };
+            const counts = { pendente: 0, aprovado: 0, alteracao: 0, reprovado: 0, ajustado: 0 };
             posts.forEach((p) => counts[STATUSES.includes(p.review?.status) ? p.review.status : "pendente"]++);
             return { ...cl, counts };
           })
@@ -381,9 +381,11 @@ async function handle(req, env) {
             const body = await readBody(req);
             const post = cleanPost(body, prev, b);
             const ids = (x) => [...(x.media || []).map((m) => m.id), x.cover?.id || ""].join("|");
-            if (ids(post) !== ids(prev) && post.review?.status && post.review.status !== "pendente") {
-              post.review = addHistory(post, { kind: "review", status: "pendente", note: "Nova arte enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
-              Object.assign(post.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            const was = post.review?.status;
+            if (ids(post) !== ids(prev) && was && was !== "pendente" && was !== "ajustado") {
+              const to = was === "alteracao" || was === "reprovado" ? "ajustado" : "pendente";
+              post.review = addHistory(post, { kind: "review", status: to, note: to === "ajustado" ? "Conteúdo ajustado pelo estúdio" : "Nova arte enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
+              Object.assign(post.review, { status: to, note: "", at: now(), byLabel: "ALL TORAL" });
             }
             await db.setJSON(key, post);
             return json({ post });
@@ -395,6 +397,12 @@ async function handle(req, env) {
           if ((e === "resend" || e === "clear") && method === "POST") {
             prev.review = addHistory(prev, { kind: "review", status: "pendente", note: e === "clear" ? "Sticker removido pelo estúdio" : "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            await db.setJSON(key, prev);
+            return json({ post: prev });
+          }
+          if (e === "adjusted" && method === "POST") {
+            prev.review = addHistory(prev, { kind: "review", status: "ajustado", note: "Conteúdo ajustado pelo estúdio", byLabel: "ALL TORAL", at: now() });
+            Object.assign(prev.review, { status: "ajustado", note: "", at: now(), byLabel: "ALL TORAL" });
             await db.setJSON(key, prev);
             return json({ post: prev });
           }
