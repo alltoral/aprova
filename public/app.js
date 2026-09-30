@@ -143,7 +143,7 @@ function adminHome(){
   return bar()+`<main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
     <p>Cada cliente tem um link secreto que abre só a página dele, com posts, anúncios, legenda, segmentação e comentários.</p>
-    <p><a class="btn" href="/modelo-briefing.txt" download="briefing-all-toral.txt">↓ Baixar modelo de briefing</a> <span class="hint">para mandar ao cliente quando ele quiser pedir um conteúdo</span></p></section>
+    <p><button class="btn pri" data-act="brief-link">Enviar link de briefing</button> <span class="hint">o cliente abre e já cai no formulário para pedir um conteúdo</span></p></section>
     </main><div class="band"><div class="wrap"><span><b>${tot.pendente}</b>aguardando</span><span><b>${tot.aprovado}</b>aprovados</span><span><b>${tot.alteracao}</b>com ajustes</span><span><b>${tot.reprovado}</b>para repensar</span></div></div><main class="wrap">
     <div class="section-h"><h2>Seus <em>clientes</em></h2><div class="actions"><span class="eyebrow">${list.length} ${list.length===1?"cliente":"clientes"}</span><button class="link" data-act="logout">Sair</button></div></div>
     <div class="clients" style="padding-bottom:48px">${cards}<button class="ccard new" data-act="new-client"><span class="plus">+</span><span>Novo cliente</span></button></div>
@@ -184,7 +184,7 @@ function clientPage(c){
     ${pubBox}
   </div></section>
   <main class="wrap">
-    ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><a class="btn" href="/modelo-briefing.txt" download="briefing-all-toral.txt">↓ Modelo de briefing</a><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
+    ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}/pedido" data-msg="Link de briefing copiado">Copiar link de briefing</button><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed==="token"?"danger":""}" data-act="new-token">${S.armed==="token"?"confirmar: o link antigo para de funcionar":"gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`:""}
     ${onPub?"":S.isOwner?requestsAdmin():`<div class="req-bar"><div><b>Precisa de um conteúdo novo?</b><span>Conte o que você quer e o estúdio recebe na hora.</span></div><button class="btn pri" data-act="new-request">+ Pedir conteúdo</button></div>`}
     <div class="tabs" role="tablist">${tab("all","Tudo",all.length)}${nets.filter(k=>S.isOwner||all.some(p=>netOf(p)===k)).map(k=>tab(k,NETS[k],all.filter(p=>netOf(p)===k).length)).join("")}${c.ads||adsN?tab("ads","Anúncios",adsN):""}</div>
@@ -218,7 +218,7 @@ function openPost(id){S.open=id;S.slide=0;S.pick=null;S.commentOpen=false;S.show
 function closeSheet(){S.open=null;S.editor=null;S.armed=null;$("#sheet").hidden=true;$("#sheet").innerHTML="";document.body.style.overflow=""}
 function renderSheet(){
   const sh=$("#sheet");
-  if(S.editor){sh.innerHTML=S.editor.kind==="client"?clientForm():S.editor.kind==="request"?requestForm():postForm();sh.hidden=false;document.body.style.overflow="hidden";sh.setAttribute("style",brandVars(currentClient()||{color:S.editor?.data?.color}));return}
+  if(S.editor){sh.innerHTML=S.editor.kind==="client"?clientForm():S.editor.kind==="request"?requestForm():S.editor.kind==="brieflink"?briefLinkForm():postForm();sh.hidden=false;document.body.style.overflow="hidden";sh.setAttribute("style",brandVars(currentClient()||{color:S.editor?.data?.color}));return}
   const p=S.posts.find(x=>x.id===S.open);
   if(!p){closeSheet();return}
   const c=S.client||{};
@@ -524,23 +524,39 @@ function requestForm(){
   return `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="rh">
   <div class="panel-h"><div class="t"><span class="eyebrow">${esc(S.client?.name||"")}</span><h2 id="rh">Pedir conteúdo</h2></div><button class="x" data-act="close" aria-label="Fechar">✕</button></div>
   <div class="form">
-    <div class="field full brief"><span>Já preencheu o briefing?</span><div class="brief-row"><label class="btn sm" for="up-req">📄 Subir briefing preenchido</label><input class="sr" id="up-req" type="file" accept=".txt,.md,text/plain" data-upload-req><a class="link" href="/modelo-briefing.txt" download="briefing-all-toral.txt">Baixar modelo de briefing</a></div>${e.briefMsg?`<span class="hint brief-msg">${esc(e.briefMsg)}</span>`:`<span class="hint">Ou preencha aqui embaixo mesmo.</span>`}</div>
+    <p class="hint" style="margin:0 0 4px">Conte o que você precisa. O estúdio recebe na hora e você acompanha por aqui.</p>
     <div class="fgrid">
-      ${f("name","Seu nome","Quem está pedindo")}
-      ${f("prazo","Para quando?","","date")}
+      ${f("tema","Tema do conteúdo *","Ex.: promoção de aniversário da loja","text","full")}
+      ${ta("mensagem","Mensagem principal *","O que o público precisa entender ou sentir",3)}
       <div class="field full"><span>O que você precisa</span><div class="seg">${REQ_TIPOS.map(t=>`<button type="button" data-act="req-tipo" data-k="${t}" aria-pressed="${d.tipo===t}">${t}</button>`).join("")}</div></div>
       ${nets.length>1?`<div class="field full"><span>Rede</span><div class="seg">${nets.map(t=>`<button type="button" data-act="req-rede" data-k="${esc(t)}" aria-pressed="${d.rede===t}">${esc(t)}</button>`).join("")}</div></div>`:""}
-      ${f("tema","Tema do conteúdo *","Ex.: promoção de aniversário da loja","text","full")}
+      ${f("prazo","Para quando?","","date")}
+      ${f("name","Seu nome","Quem está pedindo")}
+    </div>
+    <details class="more" ${d.objetivo||d.infos||d.publico||d.referencias||d.obs?"open":""}><summary>Mais detalhes (opcional)</summary><div class="fgrid">
       ${f("objetivo","Objetivo","Ex.: vender mais no fim de semana","text","full")}
-      ${ta("mensagem","Mensagem principal *","O que o público precisa entender ou sentir",3)}
       ${ta("infos","Informações obrigatórias","Preço, endereço, horário, datas, condições, telefone…",3)}
       ${f("publico","Público","Ex.: mulheres de 25 a 45 anos em Curitiba","text","full")}
       ${ta("referencias","Referências","Links ou perfis que você gosta",2)}
       ${ta("obs","Observações","Qualquer outra coisa importante",2)}
-    </div>
+    </div></details>
     ${e.err?`<p class="err">${esc(e.err)}</p>`:""}
     ${mine.length?`<div class="block"><h3>Seus pedidos</h3><div class="req-mine">${mine.map(r=>`<div class="rq-m"><span class="rq-st ${REQ_ST[r.status]?.cls||"novo"}">${REQ_ST[r.status]?.label||"Recebido"}</span><b>${esc(r.tema||r.mensagem?.slice(0,50)||"Pedido")}</b><small>${esc(fmtStamp(r.at))}</small></div>`).join("")}</div></div>`:""}
-  <div class="form-foot"><button class="btn ghost" data-act="close">Cancelar</button><span class="sp"></span><button class="btn pri" data-act="send-request" ${S.busy?"disabled":""}>${S.busy?"Enviando…":"Enviar pedido para o estúdio"}</button></div>
+  <div class="form-foot"><button class="btn ghost" data-act="close">Cancelar</button><span class="sp"></span><button class="btn pri" data-act="send-request" ${S.busy?"disabled":""}>${S.busy?"Enviando…":"Enviar pedido"}</button></div>
+  </div></div>`;
+}
+function openRequestForm(){S.open=null;S.editor={kind:"request",id:null,data:{name:S.who||"",tipo:"Post",rede:clientNets(S.client).length===1?NETS[clientNets(S.client)[0]]:"",tema:"",objetivo:"",mensagem:"",infos:"",publico:"",referencias:"",prazo:"",obs:""}};renderSheet()}
+function briefLinkForm(){
+  const e=S.editor; const list=S.clientList||[]; const c=list.find(x=>x.id===e.pick);
+  const link=c?`${location.origin}/c/${c.token}/pedido`:"";
+  const msg=c?`Oi! Para pedir um conteúdo novo para a ${c.name}, é só preencher este formulário rapidinho: ${link}`:"";
+  return `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="bh">
+  <div class="panel-h"><div class="t"><span class="eyebrow">Briefing</span><h2 id="bh">Enviar link de briefing</h2></div><button class="x" data-act="close" aria-label="Fechar">✕</button></div>
+  <div class="form">
+    <div class="field full"><span>Para qual cliente?</span><div class="brief-chips">${list.map(x=>`<button type="button" class="chip" data-act="brief-pick-client" data-id="${x.id}" aria-pressed="${e.pick===x.id}">${esc(x.name)}</button>`).join("")||`<span class="hint">Cadastre um cliente primeiro.</span>`}</div></div>
+    ${c?`<div class="blink"><span class="hint">Link de briefing de ${esc(c.name)}</span><code>${esc(link)}</code>
+      <div class="actions"><button class="btn pri" data-act="copy-link" data-link="${esc(link)}" data-msg="Link de briefing copiado">Copiar link</button><a class="btn" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Mandar no WhatsApp</a><button class="btn" data-act="copy-link" data-link="${esc(msg)}" data-msg="Mensagem copiada">Copiar com mensagem</button></div>
+      <span class="hint">O cliente abre o link, cai direto no formulário e o pedido aparece aqui no painel, na página dele.</span></div>`:""}
   </div></div>`;
 }
 async function sendRequest(){
@@ -780,7 +796,7 @@ document.addEventListener("click",async ev=>{
     case "close-comment": S.commentOpen=false; renderSheet(); break;
     case "resend": resend(b.dataset.id); break;
     case "copy-cap": {const p=S.posts.find(x=>x.id===S.open);copy([p?.caption,p?.hashtags].filter(Boolean).join("\n\n"),"Legenda copiada");break}
-    case "copy-link": copy(b.dataset.link,"Link copiado"); break;
+    case "copy-link": copy(b.dataset.link,b.dataset.msg||"Link copiado"); break;
     case "new-client": S.editor={kind:"client",id:null,data:{name:"",handle:"",nicho:"",color:"#e55496",logoId:"",networks:["instagram"],ads:false}}; renderSheet(); setTimeout(()=>$("#c-name")?.focus(),30); break;
     case "edit-client": {const c=S.client;if(c){S.editor={kind:"client",id:c.id,data:JSON.parse(JSON.stringify(c))};renderSheet()}break}
     case "save-client": saveClient(); break;
@@ -794,7 +810,9 @@ document.addEventListener("click",async ev=>{
     case "cads": S.editor.data.ads=!S.editor.data.ads; renderSheet(); break;
     case "format": S.editor.data.format=b.dataset.k; renderSheet(); autoTitle(); break;
     case "gen-title": autoTitle(true); break;
-    case "new-request": S.open=null; S.editor={kind:"request",id:null,data:{name:S.who||"",tipo:"Post",rede:clientNets(S.client).length===1?NETS[clientNets(S.client)[0]]:"",tema:"",objetivo:"",mensagem:"",infos:"",publico:"",referencias:"",prazo:"",obs:""}}; renderSheet(); break;
+    case "new-request": openRequestForm(); break;
+    case "brief-link": S.editor={kind:"brieflink",pick:null}; renderSheet(); break;
+    case "brief-pick-client": S.editor.pick=b.dataset.id; renderSheet(); break;
     case "req-tipo": S.editor.data.tipo=b.dataset.k; renderSheet(); break;
     case "req-rede": S.editor.data.rede=b.dataset.k; renderSheet(); break;
     case "send-request": sendRequest(); break;
@@ -855,7 +873,7 @@ document.addEventListener("submit",async ev=>{
 function parseRoute(){
   const parts=location.pathname.split("/").filter(Boolean);
   S.token=null;S.clientId=null;S.isOwner=false;
-  if(parts[0]==="c"&&parts[1]){S.mode="client";S.token=parts[1]}
+  if(parts[0]==="c"&&parts[1]){S.mode="client";S.token=parts[1];S.wantRequest=parts[2]==="pedido"}
   else if(parts[0]==="admin"){S.mode="admin";S.isOwner=true;S.clientId=parts[1]||null}
   else S.mode="home";
   /* o app instalado abre direto na última página usada (painel ou página do cliente) */
@@ -884,6 +902,7 @@ async function load(quiet){
   }catch(e){if(!quiet)S.loadErr=e.message}
   S.ready=true;render();
   if(S.open&&!S.editor&&!S.flying)renderSheet();
+  if(S.wantRequest&&S.mode==="client"&&S.client&&!S.loadErr){S.wantRequest=false;history.replaceState({},"","/c/"+S.token);openRequestForm()}
 }
 /* atualiza sozinho para ver aprovações novas */
 setInterval(()=>{if(document.visibilityState==="visible"&&!S.editor&&!S.busy&&!S.flying&&(S.mode==="client"||S.clientId))load(true)},30000);

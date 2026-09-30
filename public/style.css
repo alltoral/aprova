@@ -406,3 +406,18 @@ textarea:focus,input:focus,select:focus{border-color:var(--pink);outline:none;bo
 .req-mine{display:grid;gap:6px}
 .rq-m{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
 .rq-m small{color:var(--muted);margin-left:auto}
+.blink{display:grid;gap:10px;background:var(--pink-soft,#fdeaf3);border-radius:12px;padding:14px}
+.blink code{font-family:var(--f-mono);font-size:13px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;word-break:break-all}
+.blink .actions{display:flex;flex-wrap:wrap;gap:8px}
+.more{border:1px solid var(--line);border-radius:12px;padding:0 14px;margin:14px 0}
+.more summary{cursor:pointer;padding:14px 0;font-weight:600;color:var(--pink-deep)}
+.more .fgrid{padding-bottom:14px}
+@media (max-width:760px){
+  .form-foot{position:sticky;bottom:0;z-index:6;background:#fff;margin:16px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 18px -12px rgba(0,0,0,.3);border-top:1px solid var(--line)}
+  .form-foot .sp{display:none}
+  .form-foot{flex-wrap:nowrap;gap:8px;padding-top:10px}
+  .form-foot .btn{flex:1 1 0;justify-content:center;min-height:46px;padding-inline:10px;text-align:center;white-space:normal;line-height:1.15}
+  .form-foot .btn.pri,.form-foot .btn.brand{flex:1.6 1 0}
+  .blink .actions .btn{width:100%;justify-content:center;min-height:46px}
+  .brief-chips .chip{min-height:40px}
+}
