@@ -143,11 +143,12 @@ function adminHome(){
   return bar()+`<div class="hero-band"><main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
     <p>Cada cliente tem um link secreto que abre só a página dele, com posts, anúncios, legenda, segmentação e comentários.</p>
-    <button class="btn brief-btn" data-act="brief-link">Enviar link de briefing</button></section>
+</section>
     </main></div><div class="band"><div class="wrap"><span><b>${tot.pendente}</b>aguardando</span><span><b>${tot.aprovado}</b>aprovados</span><span><b>${tot.alteracao}</b>com ajustes</span><span><b>${tot.reprovado}</b>para repensar</span></div></div><main class="wrap">
     <div class="section-h"><h2>Seus <em>clientes</em></h2><div class="actions"><span class="eyebrow">${list.length} ${list.length===1?"cliente":"clientes"}</span><button class="link" data-act="logout">Sair</button></div></div>
     <div class="clients" style="padding-bottom:48px">${cards}<button class="ccard new" data-act="new-client"><span class="plus">+</span><span>Novo cliente</span></button></div>
-  </main>`+foot();
+  </main>
+  <button class="fab" data-act="brief-link" aria-label="Enviar link de briefing para um cliente" title="Enviar link de briefing"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10.1 15 12 3.4 13.9z"/></svg><span>Enviar briefing</span></button>`+foot();
 }
 function avatar(c,cls=""){
   return `<div class="avatar ${cls}">${c.logoId?`<img src="${blob(c.logoId)}" alt="Logo ${esc(c.name)}">`:`<span class="ini">${esc(initials(c.name))}</span>`}</div>`;
