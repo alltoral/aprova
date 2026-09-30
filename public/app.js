@@ -148,7 +148,7 @@ function adminHome(){
     <div class="section-h"><h2>Seus <em>clientes</em></h2><div class="actions"><span class="eyebrow">${list.length} ${list.length===1?"cliente":"clientes"}</span><button class="link" data-act="logout">Sair</button></div></div>
     <div class="clients" style="padding-bottom:48px">${cards}<button class="ccard new" data-act="new-client"><span class="plus">+</span><span>Novo cliente</span></button></div>
   </main>
-  <button class="fab" data-act="brief-link" aria-label="Enviar link de briefing para um cliente" title="Enviar link de briefing"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10.1 15 12 3.4 13.9z"/></svg><span>Enviar briefing</span></button>`+foot();
+  <button class="fab" data-act="brief-link" aria-label="Enviar briefing para um cliente"><img src="/icons/briefing.png" alt="" width="30" height="30"><span class="fab-tip" role="tooltip">Enviar briefing</span></button>`+foot();
 }
 function avatar(c,cls=""){
   return `<div class="avatar ${cls}">${c.logoId?`<img src="${blob(c.logoId)}" alt="Logo ${esc(c.name)}">`:`<span class="ini">${esc(initials(c.name))}</span>`}</div>`;
