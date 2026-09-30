@@ -156,10 +156,10 @@ function clientPage(c){
   const all=visiblePosts();
   const n=counts(all);
   const byTab=all.filter(p=>S.tab==="all"||(S.tab==="ads"?isAd(p):netOf(p)===S.tab));
-  const list=byTab.filter(p=>S.filter==="all"||statusOf(p.id)===S.filter);
+  const list=byTab.filter(p=>S.filter==="all"||(S.filter==="publicado"?!!p.published:statusOf(p.id)===S.filter));
   const nets=clientNets(c); const adsN=all.filter(isAd).length;
   const tab=(k,l,num)=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-act="tab" data-k="${k}">${l}<span class="n">${num}</span></button>`;
-  const chip=(k,l)=>`<button class="chip" aria-pressed="${S.filter===k}" data-act="filter" data-k="${k}">${k!=="all"?`<i class="dot" style="background:${ST[k].color}"></i>`:""}${l}</button>`;
+  const chip=(k,l)=>`<button class="chip" aria-pressed="${S.filter===k}" data-act="filter" data-k="${k}">${k==="publicado"?`<i class="dot" style="background:#141014"></i>`:k!=="all"?`<i class="dot" style="background:${ST[k].color}"></i>`:""}${l}</button>`;
   const link=location.origin+"/c/"+(c.token||"");
   return bar(true)+`
   ${S.isOwner||store.get("aprov_admin")?`<div class="wrap"><button class="back" data-act="home">← ${S.isOwner?"Todos os clientes":"Voltar ao painel do estúdio"}</button></div>`:""}
@@ -178,7 +178,7 @@ function clientPage(c){
     ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed==="token"?"danger":""}" data-act="new-token">${S.armed==="token"?"confirmar: o link antigo para de funcionar":"gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`:""}
     <div class="tabs" role="tablist">${tab("all","Tudo",all.length)}${nets.filter(k=>S.isOwner||all.some(p=>netOf(p)===k)).map(k=>tab(k,NETS[k],all.filter(p=>netOf(p)===k).length)).join("")}${c.ads||adsN?tab("ads","Anúncios",adsN):""}</div>
-    <div class="filters">${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}</div>
+    <div class="filters">${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}${all.some(p=>p.published)?chip("publicado","Publicados"):""}</div>
     ${list.length?`<div class="grid">${list.map(postCard).join("")}</div>`:
       `<div class="emptybox"><h3>${all.length?"Nada neste filtro":"Nenhuma peça ainda"}</h3><p>${all.length?"Troque o filtro para ver as outras peças.":S.isOwner?"Suba a primeira arte com legenda e, se for anúncio, a segmentação.":"Assim que o estúdio enviar as peças, elas aparecem aqui para você aprovar."}</p>${S.isOwner&&!all.length?`<button class="btn pri" data-act="new-post">+ Nova peça</button>`:""}</div>`}
   </main>`+foot();
@@ -193,7 +193,7 @@ function postCard(p){
   const st=statusOf(p.id); const imgs=p.media||[];
   return `<button class="pcard st-${st}" data-act="open" data-id="${p.id}">
     <div class="thumb"><div class="clip">${p.cover&&isVideo(imgs[0])?`<img class="art" src="${blob(p.cover.id)}" alt="Capa de ${esc(p.title)}" loading="lazy">`:imgs[0]?mediaEl(imgs[0],p.title):`<div class="empty">Sem arte ainda</div>`}
-      ${imgs.length>1?`<span class="multi">1/${imgs.length}</span>`:""}${isVideo(imgs[0])?`<span class="play" aria-hidden="true"></span>`:""}</div>
+      ${p.published?`<span class="pub-tag">Publicado</span>`:""}${imgs.length>1?`<span class="multi">1/${imgs.length}</span>`:""}${isVideo(imgs[0])?`<span class="play" aria-hidden="true"></span>`:""}</div>
       ${hasStk(st)?`<div class="sticker">${sticker(st)}</div>`:""}</div>
     <div class="pmeta">
       <div class="row-badges"><span class="badge">${NETS[netOf(p)]}</span>${isVideo(imgs[0])?`<span class="badge">${vidLabel(p)}</span>`:imgs.length>1?`<span class="badge">Carrossel</span>`:""}${isAd(p)?`<span class="badge ads">Anúncio</span>`:""}${p.visible===false?`<span class="badge draft">Rascunho</span>`:""}
@@ -260,7 +260,7 @@ function postSheet(p,c){
   const age=ad?[ad.idadeMin,ad.idadeMax].filter(Boolean).join(" a "):"";
   const mob=MOB()&&!S.isOwner;
   return `<div class="panel ${mob?"has-mbar":""}" role="dialog" aria-modal="true" aria-labelledby="ph">
-   <div class="panel-h"><div class="t"><div class="row-badges"><span class="badge">${NETS[netOf(p)]}</span>${ad?`<span class="badge ads">Anúncio</span>`:""}<span class="d" style="font-family:var(--f-mono);font-size:12px;color:var(--muted)">${esc(fmtDate(p.date))}</span></div><h2 id="ph">${esc(p.title||"Peça sem título")}</h2></div>
+   <div class="panel-h"><div class="t"><div class="row-badges">${p.published?`<span class="pub-tag inline">Publicado</span>`:""}<span class="badge">${NETS[netOf(p)]}</span>${ad?`<span class="badge ads">Anúncio</span>`:""}<span class="d" style="font-family:var(--f-mono);font-size:12px;color:var(--muted)">${esc(fmtDate(p.date))}</span></div><h2 id="ph">${esc(p.title||"Peça sem título")}</h2></div>
      ${S.isOwner?`<button class="btn sm" data-act="edit-post" data-id="${p.id}">Editar</button>`:""}
      <button class="x" data-act="close" aria-label="Fechar">✕</button></div>
    <div class="pgrid">
@@ -282,6 +282,8 @@ function postSheet(p,c){
         <h3 id="rv">Sua <em>aprovação</em></h3>
         <div class="current"><span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span>${r&&r.at&&st!=="pendente"?`<span>por ${esc(nameOf(r))} · ${esc(fmtStamp(r.at))}</span>`:""}</div>
         ${r&&r.note&&st!=="pendente"?`<div class="studio-note" style="border-color:${ST[st].color}">${esc(r.note)}</div>`:""}
+        ${st==="aprovado"||p.published?downloads(p):""}
+        ${S.isOwner?`<div class="pub-row">${p.published?`<span class="pub-tag inline">Publicado</span><span class="when">${esc(fmtStamp(p.published.at))}</span><button class="link" data-act="publish" data-id="${p.id}" data-v="0">Desmarcar</button>`:`<button class="btn dark" data-act="publish" data-id="${p.id}" data-v="1" ${S.busy?"disabled":""}>Marcar como publicado</button>`}</div>`:""}
         ${S.isOwner&&(st==="alteracao"||st==="reprovado")?`<div class="actions" style="margin-bottom:10px"><button class="btn pri" data-act="adjusted" data-id="${p.id}" ${S.busy?"disabled":""}>Marcar como conteúdo ajustado</button></div>`:""}
         ${!S.isOwner&&st==="ajustado"?`<p class="adj-note">O estúdio ajustou esta peça. Confira e escolha o sticker de novo.</p>`:""}
         ${S.isOwner?`<p class="hint">Só o cliente escolhe o sticker. Para tirar, use o ✕ no canto dele.</p>
@@ -367,6 +369,20 @@ async function clearSticker(id){
   if(S.busy)return; S.busy=true;
   try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/clear`,{method:"POST"});applyPost(r.post);S.pick=null;render();renderSheet();toast("Sticker removido")}catch(e){toast(e.message)}
   S.busy=false;
+}
+const EXT={"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif","image/svg+xml":"svg","video/mp4":"mp4","video/quicktime":"mov"};
+const slug=t=>(t||"peca").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w]+/g,"-").replace(/^-|-$/g,"").toLowerCase().slice(0,50)||"peca";
+function downloads(p){
+  const media=p.media||[]; const base=slug(p.title);
+  const files=media.map((m,i)=>({m,label:isVideo(m)?"Baixar vídeo":media.length>1?`Baixar arte ${i+1}`:"Baixar arte",name:`${base}${media.length>1?"-"+(i+1):""}.${EXT[m.type]||"bin"}`}));
+  if(p.cover)files.push({m:p.cover,label:"Baixar capa",name:`${base}-capa.${EXT[p.cover.type]||"jpg"}`});
+  if(!files.length&&!p.caption)return "";
+  return `<div class="dl-box"><b>Conteúdo pronto para baixar</b><div class="dl-list">${files.map(f=>`<a class="btn sm" href="${blob(f.m.id)}?dl=${encodeURIComponent(f.name)}" download="${esc(f.name)}">↓ ${f.label}</a>`).join("")}${p.caption||p.hashtags?`<button class="btn sm" data-act="copy-caption" data-id="${p.id}">Copiar legenda</button>`:""}</div></div>`;
+}
+async function setPublished(id,v){
+  if(S.busy)return; S.busy=true; renderSheet();
+  try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/published`,{method:"POST",body:{published:v}});applyPost(r.post);render();toast(v?"Marcado como publicado":"Publicado desmarcado")}catch(e){toast(e.message)}
+  S.busy=false; renderSheet();
 }
 async function markAdjusted(id){
   if(S.busy)return; S.busy=true; renderSheet();
@@ -540,6 +556,8 @@ document.addEventListener("click",async ev=>{
     case "pick": if(S.isOwner)break; if(statusOf(S.open)===b.dataset.s){if(b.dataset.s==="alteracao"){S.commentOpen=true;renderSheet();setTimeout(()=>$("#note")?.focus(),50)}else toast("Essa arte já está com esse sticker");break} placeSticker(b.dataset.s,b.querySelector(".mini")); break;
     case "clear-stk": clearSticker(b.dataset.id); break;
     case "adjusted": markAdjusted(b.dataset.id); break;
+    case "publish": setPublished(b.dataset.id,b.dataset.v==="1"); break;
+    case "copy-caption": {const q=S.posts.find(x=>x.id===b.dataset.id);copy([q?.caption,q?.hashtags].filter(Boolean).join("\n\n"),"Legenda copiada");break}
     case "submit-comment": submitComment(); break;
     case "close-comment": S.commentOpen=false; renderSheet(); break;
     case "resend": resend(b.dataset.id); break;

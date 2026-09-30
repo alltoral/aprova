@@ -125,6 +125,7 @@ function cleanPost(body, prev, clientId) {
     createdAt: prev?.createdAt || now(),
     updatedAt: now(),
     review: prev?.review || { status: "pendente", history: [] },
+    published: prev?.published || null,
   };
   if (ad) {
     const keys = ["objetivo", "posicionamentos", "local", "idadeMin", "idadeMax", "genero", "publicoCustom", "interesses", "orcamento", "orcTipo", "inicio", "fim", "headline", "cta", "descricao", "url"];
@@ -188,6 +189,8 @@ async function handle(req, env) {
       if (!meta || !meta.done) return fail("Arquivo não encontrado", 404);
       const { size, chunks, type } = meta;
       const base = { "content-type": type, "accept-ranges": "bytes", "cache-control": "public, max-age=31536000, immutable" };
+      const dl = (url.searchParams.get("dl") || "").replace(/[^\w .()-]+/g, "").slice(0, 100);
+      if (dl) base["content-disposition"] = `attachment; filename="${dl}"`;
       const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range") || "");
       if (range && (range[1] || range[2])) {
         let start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
@@ -398,6 +401,12 @@ async function handle(req, env) {
             /* remover o sticker é bastidor: não entra no histórico */
             prev.review = e === "clear" ? { ...(prev.review || {}), history: prev.review?.history || [] } : addHistory(prev, { kind: "review", status: "pendente", note: "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            await db.setJSON(key, prev);
+            return json({ post: prev });
+          }
+          if (e === "published" && method === "POST") {
+            const body = await readBody(req);
+            prev.published = body.published ? { at: now() } : null;
             await db.setJSON(key, prev);
             return json({ post: prev });
           }
