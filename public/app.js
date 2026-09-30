@@ -414,6 +414,7 @@ function postForm(){
     <div class="fgrid">
       <div class="field full"><span>Rede social</span><div class="seg">${nets.map(k=>`<button data-act="net" data-k="${k}" aria-pressed="${netOf(d)===k}">${NETS[k]}</button>`).join("")}</div></div>
       ${S.client?.ads||isAd?`<div class="field full"><span>Tipo</span><div class="seg"><button data-act="kind" data-k="org" aria-pressed="${!isAd}">Orgânico</button><button data-act="kind" data-k="ads" aria-pressed="${isAd}">Anúncio pago</button></div></div>`:""}
+      ${briefBox()}
       <div class="field title-f"><span>Nome da peça</span><div class="title-row"><input type="text" id="f-title" data-f="title" value="${esc(d.title||"")}" placeholder="Ex.: Post 3 · Lançamento do cardápio"><button type="button" class="btn sm" id="gen-title" data-act="gen-title">✨ Gerar título</button></div><span class="hint">O app numera pelo tipo e lê a arte e a legenda para sugerir o assunto.</span></div>
       ${f("date","Data e hora de publicação","datetime-local")}
       <div class="field full"><span>Formato</span><div class="seg">${Object.entries(FORMATS).map(([k,v])=>`<button data-act="format" data-k="${k}" aria-pressed="${d.format===k}">${v.label} · ${v.px}</button>`).join("")}</div></div>
@@ -493,6 +494,75 @@ async function uploadFiles(files){
   }
   if(S.editor){S.editor.uploading=false;renderSheet();autoTitle()}
 }
+/* ---------- preencher a peça a partir de um arquivo de texto ---------- */
+const nrm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+const BRIEF_KEYS={"titulo":"title","nome":"title","nome da peca":"title","rede":"network","rede social":"network","tipo":"tipo","formato":"format","data":"date","data e hora":"date","localizacao":"location","local do post":"location","recado":"studioNote","recado para o cliente":"studioNote","observacao":"studioNote","legenda":"caption","texto":"caption","texto principal":"caption","hashtags":"hashtags",
+  "objetivo":"ad.objetivo","posicionamentos":"ad.posicionamentos","local do publico":"ad.local","publico local":"ad.local","regiao":"ad.local","idade":"idade","genero":"ad.genero","interesses":"ad.interesses","publico personalizado":"ad.publicoCustom","orcamento":"orcamento","inicio":"ad.inicio","fim":"ad.fim","titulo do anuncio":"ad.headline","headline":"ad.headline","descricao":"ad.descricao","botao":"ad.cta","cta":"ad.cta","link":"ad.url","link de destino":"ad.url"};
+function splitBriefs(text){return String(text).replace(/\r/g,"").split(/\n\s*(?:-{3,}|={3,})\s*\n/).map(x=>x.trim()).filter(x=>x.replace(/^#.*$/gm,"").trim())}
+function toISODate(v,withTime){
+  const m=String(v).match(/(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?(?:\D+(\d{1,2})(?:[:h](\d{2}))?)?/); const iso=String(v).match(/(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  let y,mo,d,h="12",mi="00";
+  if(iso){[,y,mo,d]=iso;if(iso[4]){h=iso[4];mi=iso[5]}}else if(m){d=m[1];mo=m[2];y=m[3]||String(new Date().getFullYear());if(y.length===2)y="20"+y;if(m[4]){h=m[4];mi=m[5]||"00"}}else return "";
+  const pad=x=>String(x).padStart(2,"0"); const day=`${y}-${pad(mo)}-${pad(d)}`;
+  return withTime?`${day}T${pad(h)}:${pad(mi)}`:day;
+}
+function parseBrief(text){
+  const out={}; let cur=null; const buf={};
+  String(text).replace(/\r/g,"").split("\n").forEach(line=>{
+    if(/^\s*#/.test(line))return;
+    const m=line.match(/^\s*([^:]{2,30}):\s*(.*)$/); const key=m&&BRIEF_KEYS[nrm(m[1])];
+    if(key){cur=key;buf[key]=(m[2]||"").trim();return}
+    if(cur==="caption"||cur==="studioNote"||cur==="ad.interesses"||cur==="ad.descricao"){buf[cur]=(buf[cur]?buf[cur]+"\n":"")+line}
+  });
+  Object.entries(buf).forEach(([k,v])=>{v=String(v).replace(/\s+$/,"").replace(/^\n+/,"");if(!v.trim())return;
+    if(k==="network"){const n=nrm(v);const hit=Object.entries(NETS).find(([key,l])=>n.includes(nrm(l))||n===key)||(n.includes("twitter")?["x"]:null);if(hit)out.network=hit[0];return}
+    if(k==="tipo"){if(/anuncio|pago|patrocinado|ads/.test(nrm(v)))out.sponsored=true;else if(/organico/.test(nrm(v)))out.sponsored=false;return}
+    if(k==="format"){const f=v.replace(/\s/g,"").replace(/[:x×]/i,"x").match(/(4x5|1x1|9x16|16x9)/);if(f)out.format=f[1];else if(/stor|reel|vertical/i.test(v))out.format="9x16";return}
+    if(k==="date"){const d=toISODate(v,true);if(d)out.date=d;return}
+    if(k==="idade"){const n=v.match(/\d+/g)||[];out.ad={...(out.ad||{}),...(n[0]?{idadeMin:n[0]}:{}),...(n[1]?{idadeMax:n[1]}:{})};return}
+    if(k==="orcamento"){const val=v.match(/[\d.,]+/);out.ad={...(out.ad||{}),...(val?{orcamento:val[0]}:{}),...(/total/i.test(v)?{orcTipo:"total"}:/dia/i.test(v)?{orcTipo:"por dia"}:{})};return}
+    if(k==="ad.inicio"||k==="ad.fim"){const d=toISODate(v,false);if(d)out.ad={...(out.ad||{}),[k.slice(3)]:d};return}
+    if(k.startsWith("ad.")){out.ad={...(out.ad||{}),[k.slice(3)]:v.trim()};return}
+    out[k]=k==="caption"?v:v.trim();
+  });
+  return out;
+}
+function fitOptions(f){
+  const a=f.ad; if(!a)return f;
+  const best=(v,list)=>{const n=nrm(v);return list.find(o=>nrm(o)===n)||list.find(o=>nrm(o).includes(n)||n.includes(nrm(o)))||null};
+  if(a.objetivo){const o=best(a.objetivo,OBJETIVOS)||(/lead|cadastro/.test(nrm(a.objetivo))?"Cadastros (leads)":/venda|conversao/.test(nrm(a.objetivo))?"Vendas":/mensag|whats/.test(nrm(a.objetivo))?"Mensagens":null);if(o)a.objetivo=o;else delete a.objetivo}
+  if(a.cta){const o=best(a.cta,CTAS);if(o)a.cta=o;else delete a.cta}
+  if(a.genero){const g=nrm(a.genero);a.genero=/mulher|feminin/.test(g)?"Mulheres":/homem|homens|masculin/.test(g)?"Homens":"Todos"}
+  if(a.orcTipo&&!["por dia","total"].includes(a.orcTipo))a.orcTipo=/total/i.test(a.orcTipo)?"total":"por dia";
+  return f;
+}
+async function applyBrief(text){
+  const e=S.editor; if(!e)return;
+  let f=parseBrief(text); const known=Object.keys(f).length+(f.ad?Object.keys(f.ad).length-1:0);
+  if(known<2||!f.caption){
+    e.briefMsg="Lendo o texto com a IA…";renderSheet();
+    try{const r=await api("/api/admin/parse",{method:"POST",body:{text}});if(r.fields){const ai=r.fields;if(ai.date)ai.date=toISODate(ai.date,true)||"";if(ai.ad){if(ai.ad.inicio)ai.ad.inicio=toISODate(ai.ad.inicio,false);if(ai.ad.fim)ai.ad.fim=toISODate(ai.ad.fim,false)}
+      if(ai.format)ai.format=(String(ai.format).replace(/[:×]/,"x").match(/4x5|1x1|9x16|16x9/)||[""])[0]||undefined;if(ai.network&&!NETS[ai.network])delete ai.network;
+      f={...ai,...f,ad:{...(ai.ad||{}),...(f.ad||{})}}}}catch(err){}
+  }
+  f=fitOptions(f);
+  if(S.editor!==e)return;
+  const d=e.data; let n=0;
+  Object.entries(f).forEach(([k,v])=>{if(k==="ad"){Object.entries(v||{}).forEach(([ak,av])=>{if(av!==""&&av!=null){d.ad=d.ad||{};d.ad[ak]=av;n++}});return}if(v!==""&&v!=null&&v!==undefined){d[k]=v;n++}});
+  if(f.ad&&Object.keys(f.ad).length&&f.sponsored===undefined&&(f.ad.orcamento||f.ad.objetivo&&f.ad.headline))d.sponsored=true;
+  if(f.title){const kind=postKind(d);if(!new RegExp("^(Post|Carrossel|Reels|Vídeo|Stories|Anúncio|Status) \\d+","i").test(f.title)){const num=nextNum(kind,e.id);e.num=num;e.numKind=kind;d.title=`${kind} ${num} · ${f.title}`}e.autoTitle=d.title}
+  e.briefMsg=n?`${n} ${n===1?"campo preenchido":"campos preenchidos"} pelo arquivo. Confira antes de enviar.`:"Não encontrei informações nesse arquivo. Use o modelo para facilitar.";
+  renderSheet(); if(!f.title)autoTitle();
+}
+function briefBox(){
+  const e=S.editor; const blocks=e.briefBlocks||[];
+  return `<div class="field full brief"><span>Preencher com arquivo</span>
+    <div class="brief-row"><label class="btn sm" for="up-brief">📄 Subir arquivo de texto</label><input class="sr" id="up-brief" type="file" accept=".txt,.md,.text,text/plain,text/markdown" data-upload-brief><a class="link" href="/modelo-peca.txt" download="modelo-peca.txt">Baixar modelo</a></div>
+    ${blocks.length>1?`<div class="brief-pick"><span class="hint">Esse arquivo tem ${blocks.length} peças. Escolha qual preencher:</span><div class="brief-chips">${blocks.map((b,i)=>`<button type="button" class="chip" data-act="brief-pick" data-i="${i}" aria-pressed="${e.briefPicked===i}">${esc(briefLabel(b,i))}</button>`).join("")}</div></div>`:""}
+    ${e.briefMsg?`<span class="hint brief-msg">${esc(e.briefMsg)}</span>`:`<span class="hint">Suba um .txt com legenda, data, rede e segmentação. O app preenche o formulário e a IA ajuda quando o texto está solto.</span>`}</div>`;
+}
+function briefLabel(b,i){const f=parseBrief(b);return (f.title||(f.caption||"").split("\n")[0]||b.split("\n").find(l=>l.trim()&&!/^#/.test(l))||`Peça ${i+1}`).slice(0,40)}
+
 /* ---------- título automático: Tipo + número + assunto ---------- */
 function postKind(p){
   const m=p.media||[];
@@ -633,6 +703,7 @@ document.addEventListener("click",async ev=>{
     case "cads": S.editor.data.ads=!S.editor.data.ads; renderSheet(); break;
     case "format": S.editor.data.format=b.dataset.k; renderSheet(); autoTitle(); break;
     case "gen-title": autoTitle(true); break;
+    case "brief-pick": {const e=S.editor;const i=Number(b.dataset.i);if(e?.briefBlocks?.[i]){e.briefPicked=i;applyBrief(e.briefBlocks[i])}break}
     case "rm-media": S.editor.data.media.splice(Number(b.dataset.i),1); renderSheet(); break;
     case "mv": {const m=S.editor.data.media,i=Number(b.dataset.i),j=i+Number(b.dataset.d);if(j>=0&&j<m.length){[m[i],m[j]]=[m[j],m[i]];renderSheet()}break}
     case "save-post": savePost(b.dataset.vis==="1"); break;
@@ -654,6 +725,12 @@ document.addEventListener("change",ev=>{
   if(S.editor?.kind==="client"&&(t.dataset.f==="color"||t.id==="c-name"))updateClientPreview();
   if(S.editor?.kind==="post"&&t.dataset.f==="caption")autoTitle();
   if(t.matches("[data-upload-media]")&&t.files.length)uploadFiles(t.files);
+  if(t.matches("[data-upload-brief]")&&t.files[0]&&S.editor){const file=t.files[0];t.value="";
+    if(file.size>200000){S.editor.briefMsg="Arquivo grande demais. Use um .txt de até 200 KB.";renderSheet();return}
+    file.text().then(txt=>{const e=S.editor;if(!e)return;const blocks=splitBriefs(txt);
+      if(!blocks.length){e.briefMsg="O arquivo está vazio.";renderSheet();return}
+      if(blocks.length===1){e.briefBlocks=null;applyBrief(blocks[0]);return}
+      e.briefBlocks=blocks;e.briefPicked=null;e.briefMsg="";renderSheet()}).catch(()=>{if(S.editor){S.editor.briefMsg="Não consegui ler esse arquivo. Salve como .txt e tente de novo.";renderSheet()}})}
   if(t.matches("[data-upload-cover]")&&t.files[0]){const f=t.files[0];S.editor.uploadingCover=true;S.editor.err="";renderSheet();uploadOne(f).then(r=>{if(S.editor){S.editor.data.cover={id:r.id,type:r.type};setTimeout(()=>autoTitle(),0)}}).catch(e=>{if(S.editor)S.editor.err=e.message}).finally(()=>{if(S.editor){S.editor.uploadingCover=false;renderSheet()}})}
   if(t.matches("[data-upload-logo]")&&t.files[0]){const f=t.files[0];S.editor.uploading=true;renderSheet();uploadOne(f).then(r=>{S.editor.data.logoId=r.id}).catch(e=>{S.editor.err=e.message}).finally(()=>{if(S.editor){S.editor.uploading=false;renderSheet()}})}
 });

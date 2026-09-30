@@ -283,6 +283,47 @@ async function handle(req, env) {
 
       if (a === "login") return json({ ok: true });
 
+      /* lê um texto livre (briefing) e devolve os campos da peça */
+      if (a === "parse" && method === "POST") {
+        if (!env.AI) return json({ fields: null });
+        const body = await readBody(req);
+        const text = str(body.text, 8000);
+        if (!text.trim()) return json({ fields: null });
+        const ask = `Extraia deste briefing os dados de UM post de rede social e responda SOMENTE com um objeto JSON válido, sem comentários.
+Chaves possíveis (omita as que não aparecem no texto, não invente nada):
+title, network (instagram, facebook, tiktok, linkedin, youtube, pinterest, x ou whatsapp), sponsored (true se for anúncio pago), format (4x5, 1x1, 9x16 ou 16x9), date (AAAA-MM-DDTHH:MM), caption (legenda completa, mantendo quebras de linha), hashtags, location, studioNote,
+ad: { objetivo, posicionamentos, local, idadeMin, idadeMax, genero (Todos, Mulheres ou Homens), publicoCustom, interesses, orcamento, orcTipo (por dia ou total), inicio (AAAA-MM-DD), fim (AAAA-MM-DD), headline, cta, descricao, url }
+Briefing:
+"""
+${text}
+"""`;
+        const pick = (raw) => {
+          const t = typeof raw === "object" && raw ? JSON.stringify(raw) : String(raw || "");
+          const m = t.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try { return JSON.parse(m[0]); } catch { return null; }
+        };
+        for (const model of ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct"]) {
+          try {
+            const r = await env.AI.run(model, { messages: [{ role: "user", content: ask }], max_tokens: 1500 });
+            const o = pick(r?.response ?? r);
+            if (!o) continue;
+            const keys = ["title", "network", "format", "date", "caption", "hashtags", "location", "studioNote"];
+            const adKeys = ["objetivo", "posicionamentos", "local", "idadeMin", "idadeMax", "genero", "publicoCustom", "interesses", "orcamento", "orcTipo", "inicio", "fim", "headline", "cta", "descricao", "url"];
+            const fields = {};
+            keys.forEach((k) => { if (o[k] != null && o[k] !== "") fields[k] = str(String(o[k]), 5000); });
+            if (o.sponsored === true || o.sponsored === "true") fields.sponsored = true;
+            if (o.ad && typeof o.ad === "object") {
+              const ad = {};
+              adKeys.forEach((k) => { if (o.ad[k] != null && o.ad[k] !== "") ad[k] = str(String(o.ad[k]), 1000); });
+              if (Object.keys(ad).length) fields.ad = ad;
+            }
+            return json({ fields });
+          } catch (err) { /* tenta o próximo modelo */ }
+        }
+        return json({ fields: null });
+      }
+
       /* sugestão de assunto para o título: lê a arte (miniatura) e a legenda com a IA do Cloudflare */
       if (a === "title" && method === "POST") {
         if (!env.AI) return json({ subject: "" });

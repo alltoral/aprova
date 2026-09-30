@@ -1,0 +1,44 @@
+# Modelo de peça · Aprova All Toral
+# Preencha depois dos dois pontos e apague o que não usar.
+# Para várias peças no mesmo arquivo, separe cada uma com uma linha só com ---
+# Deixe o Título em branco para o app numerar e sugerir sozinho.
+
+Título:
+Rede: Instagram
+Tipo: Orgânico
+Formato: 4:5
+Data: 05/10/2026 12:00
+Localização: Curitiba, PR
+Recado para o cliente:
+
+Legenda:
+Escreva a legenda aqui.
+Pode ter várias linhas.
+
+Hashtags: #curitiba #cafe
+
+# Só para anúncio (Tipo: Anúncio)
+Objetivo: Tráfego
+Posicionamentos: Feed, Stories e Reels
+Local do público: Curitiba e região, raio de 15 km
+Idade: 18 a 45
+Gênero: Todos
+Interesses: Café especial, gastronomia
+Público personalizado:
+Orçamento: 30,00 por dia
+Início: 05/10/2026
+Fim: 12/10/2026
+Título do anúncio: Combo da manhã por R$ 14,90
+Descrição:
+Botão: Saiba mais
+Link: https://
+
+---
+
+Título: Bastidores da cozinha
+Rede: Instagram
+Formato: 9:16
+Data: 07/10/2026 18:00
+
+Legenda:
+Outra peça no mesmo arquivo.
