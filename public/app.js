@@ -128,7 +128,7 @@ function pendingCount(){
 function bar(){
   const admin=S.mode==="admin"; const n=pendingCount();
   const pill=n==null?"":n>0?`<span class="bar-pill" title="${n} para aprovar"><i></i>${n}<span class="pl-long"> para aprovar</span></span>`:`<span class="bar-pill ok">Tudo em dia</span>`;
-  return `<header class="bar"><div class="wrap"><div class="bar-brand ${store.get("aprov_admin")&&!(admin&&!S.clientId)?"is-link":""}" ${store.get("aprov_admin")&&!(admin&&!S.clientId)?'data-act="home" role="button" tabindex="0" title="Voltar para todos os clientes"':""}><img class="bar-larot" src="${ASSET}larot.png" alt="" width="56" height="56"><div class="bar-t"><small>ALL TORAL</small><b>${admin?`Gestão de <em>aprovações</em>`:`Central de <em>aprovação</em>`}</b></div></div>${pill}</div></header>`;
+  return `<header class="bar"><div class="wrap"><div class="bar-brand ${admin&&S.clientId?"is-link":""}" ${admin&&S.clientId?'data-act="home" role="button" tabindex="0" title="Voltar para todos os clientes"':""}><img class="bar-larot" src="${ASSET}larot.png" alt="" width="56" height="56"><div class="bar-t"><small>ALL TORAL</small><b>${admin?`Gestão de <em>aprovações</em>`:`Central de <em>aprovação</em>`}</b></div></div>${pill}</div></header>`;
 }
 function foot(){return `<footer class="foot"><div class="wrap">${LOGO}<span>Estúdio criativo · Social media &amp; anúncios</span><span>@all.toral</span></div></footer>`}
 
@@ -167,8 +167,8 @@ function clientPage(c){
   const pubBox=`<button class="pubbox" data-act="view" data-k="${onPub?"main":"pub"}">${onPub?`<span>← Voltar</span><b>Conteúdos para aprovar</b>`:`<span>${pubs.length} ${pubs.length===1?"conteúdo":"conteúdos"}</span><b>Conteúdos publicados</b>`}</button>`;
   const link=location.origin+"/c/"+(c.token||"");
   return bar(true)+`
-  ${S.isOwner||store.get("aprov_admin")?`<div class="wrap"><button class="back" data-act="home">← ${S.isOwner?"Todos os clientes":"Voltar ao painel do estúdio"}</button></div>`:""}
-  <section class="chero" style="margin-top:${S.isOwner||store.get("aprov_admin")?"14px":"0"}"><div class="wrap">
+  ${S.isOwner?`<div class="wrap"><button class="back" data-act="home">← Todos os clientes</button></div>`:""}
+  <section class="chero" style="margin-top:${S.isOwner?"14px":"0"}"><div class="wrap">
     ${avatar(c)}
     <div class="who"><span class="eyebrow">Aprovação de conteúdo</span><h1 class="display">${esc(c.name)}</h1>${c.handle?`<span class="handle">${esc(c.handle)}</span>`:""}</div>
     ${onPub?"":S.isOwner?`<div class="stats">
