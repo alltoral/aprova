@@ -414,7 +414,7 @@ function postForm(){
     <div class="fgrid">
       <div class="field full"><span>Rede social</span><div class="seg">${nets.map(k=>`<button data-act="net" data-k="${k}" aria-pressed="${netOf(d)===k}">${NETS[k]}</button>`).join("")}</div></div>
       ${S.client?.ads||isAd?`<div class="field full"><span>Tipo</span><div class="seg"><button data-act="kind" data-k="org" aria-pressed="${!isAd}">Orgânico</button><button data-act="kind" data-k="ads" aria-pressed="${isAd}">Anúncio pago</button></div></div>`:""}
-      ${f("title","Nome da peça","text","Ex.: Post 03 · Lançamento do cardápio")}
+      <div class="field title-f"><span>Nome da peça</span><div class="title-row"><input type="text" id="f-title" data-f="title" value="${esc(d.title||"")}" placeholder="Ex.: Post 3 · Lançamento do cardápio"><button type="button" class="btn sm" id="gen-title" data-act="gen-title">✨ Gerar título</button></div><span class="hint">O app numera pelo tipo e lê a arte e a legenda para sugerir o assunto.</span></div>
       ${f("date","Data e hora de publicação","datetime-local")}
       <div class="field full"><span>Formato</span><div class="seg">${Object.entries(FORMATS).map(([k,v])=>`<button data-act="format" data-k="${k}" aria-pressed="${d.format===k}">${v.label} · ${v.px}</button>`).join("")}</div></div>
       <div class="field full"><span>Artes ou vídeo (a primeira vira a capa; várias viram carrossel)</span>
@@ -491,7 +491,55 @@ async function uploadFiles(files){
     catch(e){S.editor.err=e.message}
     if(S.editor)renderSheet();
   }
-  if(S.editor){S.editor.uploading=false;renderSheet()}
+  if(S.editor){S.editor.uploading=false;renderSheet();autoTitle()}
+}
+/* ---------- título automático: Tipo + número + assunto ---------- */
+function postKind(p){
+  const m=p.media||[];
+  if(isAd(p))return "Anúncio";
+  if(m.some(isVideo))return vidLabel(p);
+  if(netOf(p)==="whatsapp")return "Status";
+  if(p.format==="9x16")return "Stories";
+  return m.length>1?"Carrossel":"Post";
+}
+function nextNum(kind,exceptId){return S.posts.filter(p=>p.id!==exceptId&&postKind(p)===kind).length+1}
+function captionSubject(c){
+  const t=String(c||"").replace(/#[\p{L}\p{N}_]+/gu,"").replace(/[\p{Extended_Pictographic}\u{FE0F}]/gu,"").split(/[\n.!?]/).map(x=>x.trim()).find(x=>x.split(/\s+/).length>=2)||"";
+  const stop=/^(a|o|as|os|à|às|ao|aos|de|do|da|dos|das|em|no|na|nos|nas|e|com|para|pra|por|um|uma|seu|sua|que)$/i;
+  const ws=t.split(/\s+/).slice(0,7); while(ws.length>2&&stop.test(ws[ws.length-1].replace(/[,:;–-]+$/,"")))ws.pop();
+  const w=ws.join(" ").replace(/[,:;–-]+$/,"");
+  return w?w.charAt(0).toUpperCase()+w.slice(1):"";
+}
+async function thumbData(d){
+  const m=d.media||[]; const src=m.find(isVideo)?(d.cover||null):m[0]; const vid=!src&&m.find(isVideo);
+  if(!src&&!vid)return "";
+  try{
+    const el=await new Promise((ok,no)=>{
+      if(vid){const v=document.createElement("video");v.muted=true;v.playsInline=true;v.preload="auto";v.onloadeddata=()=>{v.currentTime=Math.min(1,(v.duration||2)/2)};v.onseeked=()=>ok(v);v.onerror=no;v.src=blob(vid.id);setTimeout(no,8000)}
+      else{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=blob(src.id)}
+    });
+    const w=el.videoWidth||el.naturalWidth,h=el.videoHeight||el.naturalHeight; const k=Math.min(1,512/Math.max(w,h));
+    const c=document.createElement("canvas");c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext("2d").drawImage(el,0,0,c.width,c.height);
+    return c.toDataURL("image/jpeg",.72);
+  }catch(e){return ""}
+}
+function setTitle(v){const e=S.editor;if(!e)return;e.data.title=v;e.autoTitle=v;const inp=$("#f-title");if(inp)inp.value=v}
+async function autoTitle(force){
+  const e=S.editor; if(!e||e.kind!=="post")return;
+  const d=e.data; const cur=(d.title||"").trim();
+  if(!force&&cur&&cur!==e.autoTitle)return;
+  const kind=postKind(d); const had=cur.match(new RegExp("^"+kind+" (\\d+)")); const num=had?Number(had[1]):e.num&&e.numKind===kind?e.num:nextNum(kind,e.id); e.num=num; e.numKind=kind;
+  const base=`${kind} ${num}`;
+  const keep=cur.includes(" · ")&&cur===e.autoTitle?cur.split(" · ").slice(1).join(" · "):"";
+  if(!force&&!(d.media||[]).length&&!d.caption){setTitle(base);return}
+  setTitle(keep?`${base} · ${keep}`:base);
+  if(!force&&keep)return;
+  const btn=$("#gen-title"); if(btn){btn.disabled=true;btn.textContent="Lendo a arte…"}
+  let subject="";
+  try{const r=await api("/api/admin/title",{method:"POST",body:{image:await thumbData(d),caption:d.caption||"",kind}});subject=r.subject||""}catch(err){}
+  if(!subject)subject=captionSubject(d.caption);
+  if(S.editor===e&&(force||(d.title||"")===e.autoTitle))setTitle(subject?`${base} · ${subject}`:base);
+  const b2=$("#gen-title"); if(b2){b2.disabled=false;b2.textContent="✨ Gerar título"}
 }
 async function savePost(visible){
   const e=S.editor; if(!e||S.busy)return;
@@ -577,13 +625,14 @@ document.addEventListener("click",async ev=>{
     case "save-client": saveClient(); break;
     case "rm-logo": S.editor.data.logoId=""; renderSheet(); break;
     case "del-client": if(S.armed==="client")deleteClient(S.editor.id);else{S.armed="client";renderSheet()} break;
-    case "new-post": S.open=null; S.editor={kind:"post",id:null,data:newPostData(S.clientId)}; renderSheet(); break;
+    case "new-post": S.open=null; S.editor={kind:"post",id:null,data:newPostData(S.clientId)}; renderSheet(); autoTitle(); break;
     case "edit-post": {const p=S.posts.find(x=>x.id===b.dataset.id);if(p){const d=JSON.parse(JSON.stringify(p));d.ad={...newPostData().ad,...(d.ad||{})};S.editor={kind:"post",id:p.id,data:d};renderSheet()}break}
-    case "kind": S.editor.data.sponsored=b.dataset.k==="ads"; delete S.editor.data.kind; renderSheet(); break;
-    case "net": S.editor.data.network=b.dataset.k; renderSheet(); break;
+    case "kind": S.editor.data.sponsored=b.dataset.k==="ads"; delete S.editor.data.kind; renderSheet(); autoTitle(); break;
+    case "net": S.editor.data.network=b.dataset.k; renderSheet(); autoTitle(); break;
     case "cnet": {const n=S.editor.data.networks||["instagram"];const k=b.dataset.k;S.editor.data.networks=n.includes(k)?n.filter(x=>x!==k):[...n,k];if(!S.editor.data.networks.length)S.editor.data.networks=[k];renderSheet();break}
     case "cads": S.editor.data.ads=!S.editor.data.ads; renderSheet(); break;
-    case "format": S.editor.data.format=b.dataset.k; renderSheet(); break;
+    case "format": S.editor.data.format=b.dataset.k; renderSheet(); autoTitle(); break;
+    case "gen-title": autoTitle(true); break;
     case "rm-media": S.editor.data.media.splice(Number(b.dataset.i),1); renderSheet(); break;
     case "mv": {const m=S.editor.data.media,i=Number(b.dataset.i),j=i+Number(b.dataset.d);if(j>=0&&j<m.length){[m[i],m[j]]=[m[j],m[i]];renderSheet()}break}
     case "save-post": savePost(b.dataset.vis==="1"); break;
@@ -603,8 +652,9 @@ document.addEventListener("input",ev=>{
 document.addEventListener("change",ev=>{
   const t=ev.target;
   if(S.editor?.kind==="client"&&(t.dataset.f==="color"||t.id==="c-name"))updateClientPreview();
+  if(S.editor?.kind==="post"&&t.dataset.f==="caption")autoTitle();
   if(t.matches("[data-upload-media]")&&t.files.length)uploadFiles(t.files);
-  if(t.matches("[data-upload-cover]")&&t.files[0]){const f=t.files[0];S.editor.uploadingCover=true;S.editor.err="";renderSheet();uploadOne(f).then(r=>{if(S.editor)S.editor.data.cover={id:r.id,type:r.type}}).catch(e=>{if(S.editor)S.editor.err=e.message}).finally(()=>{if(S.editor){S.editor.uploadingCover=false;renderSheet()}})}
+  if(t.matches("[data-upload-cover]")&&t.files[0]){const f=t.files[0];S.editor.uploadingCover=true;S.editor.err="";renderSheet();uploadOne(f).then(r=>{if(S.editor){S.editor.data.cover={id:r.id,type:r.type};setTimeout(()=>autoTitle(),0)}}).catch(e=>{if(S.editor)S.editor.err=e.message}).finally(()=>{if(S.editor){S.editor.uploadingCover=false;renderSheet()}})}
   if(t.matches("[data-upload-logo]")&&t.files[0]){const f=t.files[0];S.editor.uploading=true;renderSheet();uploadOne(f).then(r=>{S.editor.data.logoId=r.id}).catch(e=>{S.editor.err=e.message}).finally(()=>{if(S.editor){S.editor.uploading=false;renderSheet()}})}
 });
 async function copy(text,msg){try{await navigator.clipboard.writeText(text);toast(msg)}catch(e){toast("Selecione o texto e copie manualmente")}}

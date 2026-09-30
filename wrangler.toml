@@ -17,5 +17,9 @@ binding = "DB"
 database_name = "aprova"
 database_id = "ba61bdb2-7a09-40c9-80fb-5e956d996b61"
 
+# IA do Cloudflare: sugere o assunto do título lendo a arte e a legenda
+[ai]
+binding = "AI"
+
 [observability]
 enabled = true

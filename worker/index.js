@@ -283,6 +283,32 @@ async function handle(req, env) {
 
       if (a === "login") return json({ ok: true });
 
+      /* sugestão de assunto para o título: lê a arte (miniatura) e a legenda com a IA do Cloudflare */
+      if (a === "title" && method === "POST") {
+        if (!env.AI) return json({ subject: "" });
+        const body = await readBody(req);
+        const caption = str(body.caption, 1500);
+        const img = typeof body.image === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(body.image) && body.image.length < 400000 ? body.image : "";
+        const ask = `Você cria títulos internos para organizar posts de redes sociais de uma agência.
+Escreva só o assunto deste post em português do Brasil, com 2 a 6 palavras, sem aspas, sem emojis, sem hashtags, sem ponto final e sem as palavras post, reels, carrossel ou anúncio.
+Exemplo: Apartamento à venda no Bem Viver
+${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
+        const clean = (t) => String(t || "").split("\n").map((x) => x.trim()).filter(Boolean)[0]?.replace(/^["'“”*#\-\s]+|["'“”*.\s]+$/g, "").replace(/^(assunto|título|titulo)\s*:\s*/i, "").slice(0, 70) || "";
+        const models = [
+          ["@cf/meta/llama-4-scout-17b-16e-instruct", () => ({ messages: [{ role: "user", content: img ? [{ type: "text", text: ask }, { type: "image_url", image_url: { url: img } }] : ask }], max_tokens: 40 })],
+          ["@cf/meta/llama-3.1-8b-instruct", () => ({ messages: [{ role: "user", content: ask }], max_tokens: 40 })],
+        ];
+        for (const [model, input] of models) {
+          if (!img && !caption) break;
+          try {
+            const r = await env.AI.run(model, input());
+            const subject = clean(r?.response ?? r?.result?.response ?? r);
+            if (subject) return json({ subject });
+          } catch (err) { /* tenta o próximo modelo */ }
+        }
+        return json({ subject: "" });
+      }
+
       if (a === "clients" && !b && method === "GET") {
         const clients = await listJSON(db, "clients/");
         const withCounts = await Promise.all(
