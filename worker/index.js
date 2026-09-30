@@ -86,6 +86,15 @@ function makeStore(DB, ns) {
     },
   };
 }
+/* pedido de conteúdo feito pelo cliente */
+const REQ_FIELDS = ["tipo", "rede", "tema", "objetivo", "mensagem", "infos", "publico", "referencias", "prazo", "obs"];
+function cleanRequest(body, clientId) {
+  const out = { id: rid(10), clientId, at: now(), status: "novo", by: str(body.name, 80).trim() };
+  REQ_FIELDS.forEach((k) => { out[k] = str(body[k], k === "mensagem" || k === "infos" || k === "obs" || k === "referencias" ? 3000 : 300).trim(); });
+  return out;
+}
+const sortReqs = (list) => list.sort((x, y) => String(y.at).localeCompare(String(x.at)));
+
 async function listJSON(store, prefix) {
   return store.listJSON(prefix);
 }
@@ -231,7 +240,17 @@ async function handle(req, env) {
 
       if (method === "GET" && parts.length === 2) {
         const posts = sortPosts((await listJSON(db, `posts/${client.id}/`)).filter((p) => p.visible !== false));
-        return json({ client: publicClient(client), posts });
+        const requests = sortReqs(await listJSON(db, `requests/${client.id}/`));
+        return json({ client: publicClient(client), posts, requests });
+      }
+      if (method === "POST" && parts[2] === "request" && parts.length === 3) {
+        const body = await readBody(req);
+        const r = cleanRequest(body, client.id);
+        if (!r.tema && !r.mensagem) return fail("Conte o tema ou a mensagem principal do conteúdo");
+        const open = (await listJSON(db, `requests/${client.id}/`)).filter((x) => x.status !== "feito");
+        if (open.length >= 30) return fail("Você já tem muitos pedidos em aberto. Fale com o estúdio.");
+        await db.setJSON(`requests/${client.id}/${r.id}`, r);
+        return json({ request: r });
       }
       if (method === "POST" && (parts[2] === "review" || parts[2] === "comment")) {
         const body = await readBody(req);
@@ -358,7 +377,8 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const posts = all.filter((p) => !p.published);
             const counts = { pendente: 0, aprovado: 0, alteracao: 0, reprovado: 0, ajustado: 0 };
             posts.forEach((p) => counts[STATUSES.includes(p.review?.status) ? p.review.status : "pendente"]++);
-            return { ...cl, counts: { ...counts, publicado: all.length - posts.length } };
+            const reqs = (await listJSON(db, `requests/${cl.id}/`)).filter((r) => r.status === "novo").length;
+            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs } };
           })
         );
         return json({ clients: withCounts.sort((x, y) => x.name.localeCompare(y.name)) });
@@ -382,7 +402,21 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
 
         if (!c && method === "GET") {
           const posts = sortPosts(await listJSON(db, `posts/${b}/`));
-          return json({ client, posts });
+          const requests = sortReqs(await listJSON(db, `requests/${b}/`));
+          return json({ client, posts, requests });
+        }
+        if (c === "requests" && safeId(d)) {
+          const key = `requests/${b}/${d}`;
+          const r = await db.get(key, { type: "json" });
+          if (!r) return fail("Pedido não encontrado", 404);
+          if (method === "DELETE") { await db.delete(key); return json({ ok: true }); }
+          if (method === "POST") {
+            const body = await readBody(req);
+            if (!["novo", "producao", "feito"].includes(body.status)) return fail("Status inválido");
+            r.status = body.status; r.updatedAt = now();
+            await db.setJSON(key, r);
+            return json({ request: r });
+          }
         }
         if (!c && method === "PUT") {
           const body = await readBody(req);
@@ -393,6 +427,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
         }
         if (!c && method === "DELETE") {
           await db.deletePrefix(`posts/${b}/`);
+          await db.deletePrefix(`requests/${b}/`);
           await media.deletePrefix(`${b}/`);
           if (client.token) await db.delete(`tokens/${client.token}`);
           await db.delete(`clients/${b}`);

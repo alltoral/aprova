@@ -137,12 +137,13 @@ function adminHome(){
   const tot={pendente:0,aprovado:0,alteracao:0,reprovado:0,ajustado:0};list.forEach(c=>Object.keys(tot).forEach(k=>tot[k]+=c.counts?.[k]||0));
   const cards=list.map(c=>`<button class="ccard" data-act="go" data-id="${c.id}">
       <div class="sw" style="background:${esc(c.color||"#e55496")};color:${inkFor(c.color||"#e55496")}">${avatar(c)}<div class="eyebrow" style="color:inherit;opacity:.8">${esc(c.nicho||"Cliente")}</div></div>
-      <div class="body"><div class="name">${esc(c.name)}</div>
+      <div class="body"><div class="name">${esc(c.name)}${c.counts?.pedidos?` <span class="req-badge">${c.counts.pedidos} ${c.counts.pedidos===1?"pedido novo":"pedidos novos"}</span>`:""}</div>
       <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span>${c.counts?.ajustado?`<span><b>${c.counts.ajustado}</b> ajustados</span>`:""}${c.counts?.publicado?`<span><b>${c.counts.publicado}</b> publicados</span>`:""}</div></div>
     </button>`).join("");
   return bar()+`<main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
-    <p>Cada cliente tem um link secreto que abre só a página dele, com posts, anúncios, legenda, segmentação e comentários.</p></section>
+    <p>Cada cliente tem um link secreto que abre só a página dele, com posts, anúncios, legenda, segmentação e comentários.</p>
+    <p><a class="btn" href="/modelo-briefing.txt" download="briefing-all-toral.txt">↓ Baixar modelo de briefing</a> <span class="hint">para mandar ao cliente quando ele quiser pedir um conteúdo</span></p></section>
     </main><div class="band"><div class="wrap"><span><b>${tot.pendente}</b>aguardando</span><span><b>${tot.aprovado}</b>aprovados</span><span><b>${tot.alteracao}</b>com ajustes</span><span><b>${tot.reprovado}</b>para repensar</span></div></div><main class="wrap">
     <div class="section-h"><h2>Seus <em>clientes</em></h2><div class="actions"><span class="eyebrow">${list.length} ${list.length===1?"cliente":"clientes"}</span><button class="link" data-act="logout">Sair</button></div></div>
     <div class="clients" style="padding-bottom:48px">${cards}<button class="ccard new" data-act="new-client"><span class="plus">+</span><span>Novo cliente</span></button></div>
@@ -183,8 +184,9 @@ function clientPage(c){
     ${pubBox}
   </div></section>
   <main class="wrap">
-    ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
+    ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><a class="btn" href="/modelo-briefing.txt" download="briefing-all-toral.txt">↓ Modelo de briefing</a><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed==="token"?"danger":""}" data-act="new-token">${S.armed==="token"?"confirmar: o link antigo para de funcionar":"gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`:""}
+    ${onPub?"":S.isOwner?requestsAdmin():`<div class="req-bar"><div><b>Precisa de um conteúdo novo?</b><span>Conte o que você quer e o estúdio recebe na hora.</span></div><button class="btn pri" data-act="new-request">+ Pedir conteúdo</button></div>`}
     <div class="tabs" role="tablist">${tab("all","Tudo",all.length)}${nets.filter(k=>S.isOwner||all.some(p=>netOf(p)===k)).map(k=>tab(k,NETS[k],all.filter(p=>netOf(p)===k).length)).join("")}${c.ads||adsN?tab("ads","Anúncios",adsN):""}</div>
     ${onPub?`<div class="pub-head"><h2 class="display">Conteúdos <em>publicados</em></h2><p>Tudo que já foi ao ar, com os arquivos para baixar.</p></div>`:`<div class="filters">${S.isOwner?`${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}`:`${chip("all","Todos")}${chip("aguardando","Aguardando")}${chip("aprovado","Aprovados")}`}</div>`}
     ${list.length?`<div class="grid">${list.map(postCard).join("")}</div>`:
@@ -216,7 +218,7 @@ function openPost(id){S.open=id;S.slide=0;S.pick=null;S.commentOpen=false;S.show
 function closeSheet(){S.open=null;S.editor=null;S.armed=null;$("#sheet").hidden=true;$("#sheet").innerHTML="";document.body.style.overflow=""}
 function renderSheet(){
   const sh=$("#sheet");
-  if(S.editor){sh.innerHTML=S.editor.kind==="client"?clientForm():postForm();sh.hidden=false;document.body.style.overflow="hidden";sh.setAttribute("style",brandVars(currentClient()||{color:S.editor?.data?.color}));return}
+  if(S.editor){sh.innerHTML=S.editor.kind==="client"?clientForm():S.editor.kind==="request"?requestForm():postForm();sh.hidden=false;document.body.style.overflow="hidden";sh.setAttribute("style",brandVars(currentClient()||{color:S.editor?.data?.color}));return}
   const p=S.posts.find(x=>x.id===S.open);
   if(!p){closeSheet();return}
   const c=S.client||{};
@@ -494,6 +496,95 @@ async function uploadFiles(files){
   }
   if(S.editor){S.editor.uploading=false;renderSheet();autoTitle()}
 }
+/* ---------- pedidos de conteúdo (briefing do cliente) ---------- */
+const REQ_ST={novo:{label:"Recebido",cls:"novo"},producao:{label:"Em produção",cls:"prod"},feito:{label:"Pronto",cls:"feito"}};
+const REQ_TIPOS=["Post","Carrossel","Reels","Stories","Anúncio","Outro"];
+const REQ_KEYS={"nome":"name","seu nome":"name","o que voce precisa":"tipo","tipo":"tipo","formato":"tipo","rede":"rede","rede social":"rede","tema":"tema","assunto":"tema","objetivo":"objetivo","prazo":"prazo","data":"prazo","mensagem principal":"mensagem","mensagem":"mensagem","informacoes obrigatorias":"infos","informacoes":"infos","publico":"publico","referencias":"referencias","observacoes":"obs","obs":"obs"};
+const REQ_MULTI=["mensagem","infos","obs","referencias"];
+const TPL_HINTS=/^(post, carrossel, reels, stories ou anuncio|divulgar um produto, uma promocao, um evento, uma data…?|o que o publico precisa entender ou sentir com esse conteudo\.?|preco, endereco, horario, datas, condicoes, telefone…?|links ou perfis que voce gosta)$/;
+function parseRequestText(text){
+  const out={}; let cur=null;
+  String(text).replace(/\r/g,"").split("\n").forEach(line=>{
+    if(/^\s*#/.test(line))return;
+    const m=line.match(/^\s*([^:]{2,30}):\s*(.*)$/); const k=m&&REQ_KEYS[nrm(m[1])];
+    if(k){cur=k;out[k]=(m[2]||"").trim();return}
+    if(cur&&REQ_MULTI.includes(cur))out[cur]=(out[cur]?out[cur]+"\n":"")+line;
+  });
+  Object.keys(out).forEach(k=>{out[k]=String(out[k]).trim();if(!out[k]||TPL_HINTS.test(nrm(out[k])))delete out[k]});
+  if(out.tipo){const t=REQ_TIPOS.find(x=>nrm(out.tipo).includes(nrm(x)));out.tipo=t||"Outro"}
+  if(out.rede){const n=nrm(out.rede);const hit=Object.entries(NETS).find(([key,l])=>n.includes(nrm(l)));out.rede=hit?hit[1]:out.rede}
+  if(out.prazo){const d=toISODate(out.prazo,false);if(d)out.prazo=d}
+  return out;
+}
+function requestForm(){
+  const e=S.editor; const d=e.data; const mine=(S.requests||[]);
+  const f=(k,l,ph,type="text",cls="")=>`<label class="field ${cls}"><span>${l}</span><input type="${type}" data-f="${k}" id="r-${k}" value="${esc(d[k]||"")}" placeholder="${esc(ph)}"></label>`;
+  const ta=(k,l,ph,rows=3)=>`<label class="field full"><span>${l}</span><textarea data-f="${k}" id="r-${k}" rows="${rows}" placeholder="${esc(ph)}">${esc(d[k]||"")}</textarea></label>`;
+  const nets=clientNets(S.client).map(k=>NETS[k]);
+  return `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="rh">
+  <div class="panel-h"><div class="t"><span class="eyebrow">${esc(S.client?.name||"")}</span><h2 id="rh">Pedir conteúdo</h2></div><button class="x" data-act="close" aria-label="Fechar">✕</button></div>
+  <div class="form">
+    <div class="field full brief"><span>Já preencheu o briefing?</span><div class="brief-row"><label class="btn sm" for="up-req">📄 Subir briefing preenchido</label><input class="sr" id="up-req" type="file" accept=".txt,.md,text/plain" data-upload-req><a class="link" href="/modelo-briefing.txt" download="briefing-all-toral.txt">Baixar modelo de briefing</a></div>${e.briefMsg?`<span class="hint brief-msg">${esc(e.briefMsg)}</span>`:`<span class="hint">Ou preencha aqui embaixo mesmo.</span>`}</div>
+    <div class="fgrid">
+      ${f("name","Seu nome","Quem está pedindo")}
+      ${f("prazo","Para quando?","","date")}
+      <div class="field full"><span>O que você precisa</span><div class="seg">${REQ_TIPOS.map(t=>`<button type="button" data-act="req-tipo" data-k="${t}" aria-pressed="${d.tipo===t}">${t}</button>`).join("")}</div></div>
+      ${nets.length>1?`<div class="field full"><span>Rede</span><div class="seg">${nets.map(t=>`<button type="button" data-act="req-rede" data-k="${esc(t)}" aria-pressed="${d.rede===t}">${esc(t)}</button>`).join("")}</div></div>`:""}
+      ${f("tema","Tema do conteúdo *","Ex.: promoção de aniversário da loja","text","full")}
+      ${f("objetivo","Objetivo","Ex.: vender mais no fim de semana","text","full")}
+      ${ta("mensagem","Mensagem principal *","O que o público precisa entender ou sentir",3)}
+      ${ta("infos","Informações obrigatórias","Preço, endereço, horário, datas, condições, telefone…",3)}
+      ${f("publico","Público","Ex.: mulheres de 25 a 45 anos em Curitiba","text","full")}
+      ${ta("referencias","Referências","Links ou perfis que você gosta",2)}
+      ${ta("obs","Observações","Qualquer outra coisa importante",2)}
+    </div>
+    ${e.err?`<p class="err">${esc(e.err)}</p>`:""}
+    ${mine.length?`<div class="block"><h3>Seus pedidos</h3><div class="req-mine">${mine.map(r=>`<div class="rq-m"><span class="rq-st ${REQ_ST[r.status]?.cls||"novo"}">${REQ_ST[r.status]?.label||"Recebido"}</span><b>${esc(r.tema||r.mensagem?.slice(0,50)||"Pedido")}</b><small>${esc(fmtStamp(r.at))}</small></div>`).join("")}</div></div>`:""}
+  <div class="form-foot"><button class="btn ghost" data-act="close">Cancelar</button><span class="sp"></span><button class="btn pri" data-act="send-request" ${S.busy?"disabled":""}>${S.busy?"Enviando…":"Enviar pedido para o estúdio"}</button></div>
+  </div></div>`;
+}
+async function sendRequest(){
+  const e=S.editor; if(!e||S.busy)return; const d=e.data;
+  if(!(d.tema||"").trim()&&!(d.mensagem||"").trim()){e.err="Conte pelo menos o tema ou a mensagem principal.";renderSheet();return}
+  if(d.name){S.who=d.name;store.set("aprov_nome",d.name)}
+  S.busy=true;renderSheet();
+  try{const r=await api(`/api/c/${S.token}/request`,{method:"POST",body:d});S.requests=[r.request,...(S.requests||[])];S.busy=false;closeSheet();render();toast("Pedido enviado. O estúdio já recebeu!")}
+  catch(err){S.busy=false;e.err=err.message;renderSheet()}
+}
+function requestsAdmin(){
+  const list=S.requests||[]; if(!list.length)return "";
+  const open=list.filter(r=>r.status!=="feito"); const done=list.length-open.length;
+  const row=(l,v)=>v?`<div class="rq-row"><span>${l}</span><p>${esc(v)}</p></div>`:"";
+  const card=r=>`<article class="rq ${r.status}">
+    <div class="rq-h"><span class="rq-st ${REQ_ST[r.status]?.cls}">${REQ_ST[r.status]?.label}</span><span class="rq-meta">${esc([r.tipo,r.rede,r.prazo?"para "+fmtShortDay(r.prazo):""].filter(Boolean).join(" · "))}</span><small>${esc(r.by||"Cliente")} · ${esc(fmtStamp(r.at))}</small></div>
+    <h3>${esc(r.tema||"Pedido de conteúdo")}</h3>
+    ${row("Objetivo",r.objetivo)}${row("Mensagem principal",r.mensagem)}${row("Informações obrigatórias",r.infos)}${row("Público",r.publico)}${row("Referências",r.referencias)}${row("Observações",r.obs)}
+    <div class="rq-a"><button class="btn sm pri" data-act="req-post" data-id="${r.id}">Criar peça com este pedido</button>${r.status!=="producao"?`<button class="btn sm" data-act="req-st" data-id="${r.id}" data-k="producao">Em produção</button>`:""}${r.status!=="feito"?`<button class="btn sm" data-act="req-st" data-id="${r.id}" data-k="feito">Pronto</button>`:`<button class="btn sm" data-act="req-st" data-id="${r.id}" data-k="novo">Reabrir</button>`}<button class="link ${S.armed==="rq"+r.id?"danger":""}" data-act="req-del" data-id="${r.id}">${S.armed==="rq"+r.id?"confirmar exclusão":"Excluir"}</button></div>
+  </article>`;
+  return `<section class="reqs"><div class="section-h"><h2>Pedidos do <em>cliente</em></h2><span class="eyebrow">${open.length} em aberto${done?` · ${done} ${done===1?"pronto":"prontos"}`:""}</span></div>
+    <div class="rq-list">${open.map(card).join("")||`<p class="hint">Nenhum pedido em aberto.</p>`}</div>
+    ${done?`<details class="rq-done"><summary>Ver ${done} ${done===1?"pedido pronto":"pedidos prontos"}</summary><div class="rq-list">${list.filter(r=>r.status==="feito").map(card).join("")}</div></details>`:""}</section>`;
+}
+async function setRequest(id,status){
+  try{const r=await api(`/api/admin/clients/${S.clientId}/requests/${id}`,{method:"POST",body:{status}});S.requests=S.requests.map(x=>x.id===id?r.request:x);render()}catch(e){toast(e.message)}
+}
+async function delRequest(id){
+  if(S.armed!=="rq"+id){S.armed="rq"+id;render();return}
+  try{await api(`/api/admin/clients/${S.clientId}/requests/${id}`,{method:"DELETE"});S.requests=S.requests.filter(x=>x.id!==id);S.armed=null;render();toast("Pedido excluído")}catch(e){toast(e.message)}
+}
+function postFromRequest(id){
+  const r=(S.requests||[]).find(x=>x.id===id); if(!r)return;
+  const d=newPostData(S.clientId);
+  const net=Object.entries(NETS).find(([k,l])=>nrm(l)===nrm(r.rede||""));if(net)d.network=net[0];
+  if(r.tipo==="Reels"||r.tipo==="Stories")d.format="9x16";
+  if(r.tipo==="Anúncio")d.sponsored=true;
+  if(r.prazo)d.date=r.prazo+"T12:00";
+  d.fromRequest=r.id;
+  S.open=null; S.editor={kind:"post",id:null,data:d}; renderSheet();
+  if(r.tema){const kind=["Post","Carrossel","Reels","Stories","Anúncio"].includes(r.tipo)?r.tipo:postKind(d);const num=nextNum(kind,null);S.editor.num=num;S.editor.numKind=kind;setTitle(`${kind} ${num} · ${r.tema.charAt(0).toUpperCase()+r.tema.slice(1)}`)}else autoTitle();
+  if(r.status==="novo")setRequest(r.id,"producao");
+}
+
 /* ---------- preencher a peça a partir de um arquivo de texto ---------- */
 const nrm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
 const BRIEF_KEYS={"titulo":"title","nome":"title","nome da peca":"title","rede":"network","rede social":"network","tipo":"tipo","formato":"format","data":"date","data e hora":"date","localizacao":"location","local do post":"location","recado":"studioNote","recado para o cliente":"studioNote","observacao":"studioNote","legenda":"caption","texto":"caption","texto principal":"caption","hashtags":"hashtags",
@@ -703,6 +794,13 @@ document.addEventListener("click",async ev=>{
     case "cads": S.editor.data.ads=!S.editor.data.ads; renderSheet(); break;
     case "format": S.editor.data.format=b.dataset.k; renderSheet(); autoTitle(); break;
     case "gen-title": autoTitle(true); break;
+    case "new-request": S.open=null; S.editor={kind:"request",id:null,data:{name:S.who||"",tipo:"Post",rede:clientNets(S.client).length===1?NETS[clientNets(S.client)[0]]:"",tema:"",objetivo:"",mensagem:"",infos:"",publico:"",referencias:"",prazo:"",obs:""}}; renderSheet(); break;
+    case "req-tipo": S.editor.data.tipo=b.dataset.k; renderSheet(); break;
+    case "req-rede": S.editor.data.rede=b.dataset.k; renderSheet(); break;
+    case "send-request": sendRequest(); break;
+    case "req-st": setRequest(b.dataset.id,b.dataset.k); break;
+    case "req-del": delRequest(b.dataset.id); break;
+    case "req-post": postFromRequest(b.dataset.id); break;
     case "brief-pick": {const e=S.editor;const i=Number(b.dataset.i);if(e?.briefBlocks?.[i]){e.briefPicked=i;applyBrief(e.briefBlocks[i])}break}
     case "rm-media": S.editor.data.media.splice(Number(b.dataset.i),1); renderSheet(); break;
     case "mv": {const m=S.editor.data.media,i=Number(b.dataset.i),j=i+Number(b.dataset.d);if(j>=0&&j<m.length){[m[i],m[j]]=[m[j],m[i]];renderSheet()}break}
@@ -725,6 +823,8 @@ document.addEventListener("change",ev=>{
   if(S.editor?.kind==="client"&&(t.dataset.f==="color"||t.id==="c-name"))updateClientPreview();
   if(S.editor?.kind==="post"&&t.dataset.f==="caption")autoTitle();
   if(t.matches("[data-upload-media]")&&t.files.length)uploadFiles(t.files);
+  if(t.matches("[data-upload-req]")&&t.files[0]&&S.editor){const file=t.files[0];t.value="";
+    file.text().then(txt=>{const e=S.editor;if(!e)return;const f=parseRequestText(txt);const n=Object.keys(f).length;Object.assign(e.data,f);e.briefMsg=n?`${n} ${n===1?"campo preenchido":"campos preenchidos"} pelo briefing. Confira e envie.`:"Não encontrei informações nesse arquivo. Use o modelo de briefing.";renderSheet()}).catch(()=>{if(S.editor){S.editor.briefMsg="Não consegui ler esse arquivo. Salve como .txt.";renderSheet()}})}
   if(t.matches("[data-upload-brief]")&&t.files[0]&&S.editor){const file=t.files[0];t.value="";
     if(file.size>200000){S.editor.briefMsg="Arquivo grande demais. Use um .txt de até 200 KB.";renderSheet();return}
     file.text().then(txt=>{const e=S.editor;if(!e)return;const blocks=splitBriefs(txt);
@@ -777,8 +877,8 @@ async function load(quiet){
     render();return}
   if(!quiet){S.ready=false;S.loadErr="";render()}
   try{
-    if(S.mode==="client"){const r=await api(`/api/c/${S.token}`);S.client=r.client;S.posts=r.posts.map(fixReel);document.title=r.client.name+" · Aprova All Toral"}
-    else if(S.clientId){const r=await api(`/api/admin/clients/${S.clientId}`);S.client=r.client;S.posts=r.posts.map(fixReel);document.title=r.client.name+" · Aprova All Toral"}
+    if(S.mode==="client"){const r=await api(`/api/c/${S.token}`);S.client=r.client;S.posts=r.posts.map(fixReel);S.requests=r.requests||[];document.title=r.client.name+" · Aprova All Toral"}
+    else if(S.clientId){const r=await api(`/api/admin/clients/${S.clientId}`);S.client=r.client;S.posts=r.posts.map(fixReel);S.requests=r.requests||[];document.title=r.client.name+" · Aprova All Toral"}
     else{const r=await api("/api/admin/clients");S.clientList=r.clients;document.title="Aprova All Toral"}
     S.loadErr="";
   }catch(e){if(!quiet)S.loadErr=e.message}
