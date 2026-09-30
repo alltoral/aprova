@@ -236,7 +236,7 @@ function igPreview(p,c){
       ${media.length>1?`<span class="ig-count">${i+1}/${media.length}</span>`:""}
       ${media.length>1&&i>0?`<button class="ig-nav l" data-act="slide" data-d="-1" aria-label="Arte anterior">‹</button>`:""}
       ${media.length>1&&i<media.length-1?`<button class="ig-nav r" data-act="slide" data-d="1" aria-label="Próxima arte">›</button>`:""}
-      ${shownStk?`<div class="ig-stk ${S.popped===p.id?"pop":""} ${isVideo(media[i])&&!onCover?"top":""}" ${S.flying?'style="opacity:0"':""}>${sticker(shownStk)}</div>`:""}
+      ${shownStk?`<div class="ig-stk ${S.popped===p.id?"pop":""} ${isVideo(media[i])&&!onCover?"top":""}" ${S.flying?'style="opacity:0"':""}>${sticker(shownStk)}${S.isOwner?`<button class="stk-x" data-act="clear-stk" data-id="${p.id}" aria-label="Remover sticker" title="Remover sticker">✕</button>`:""}</div>`:""}
     </div>
     ${ad?`<div class="ig-cta"><span>${esc(ad.cta||"Saiba mais")}</span><span aria-hidden="true">›</span></div>`:""}
     <div class="ig-act-wrap"><div class="ig-act" aria-hidden="true">
@@ -279,7 +279,7 @@ function postSheet(p,c){
         <h3 id="rv">Sua <em>aprovação</em></h3>
         <div class="current"><span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span>${r&&r.at&&st!=="pendente"?`<span>por ${esc(nameOf(r))} · ${esc(fmtStamp(r.at))}</span>`:""}</div>
         ${r&&r.note&&st!=="pendente"?`<div class="studio-note" style="border-color:${ST[st].color}">${esc(r.note)}</div>`:""}
-        ${S.isOwner?`<p class="hint">Só o cliente escolhe o sticker. Aqui você responde os comentários.</p>
+        ${S.isOwner?`<p class="hint">Só o cliente escolhe o sticker. Para tirar, use o ✕ no canto dele.</p>
           <label class="field"><span>Responder</span><textarea id="note" placeholder="Escreva sua resposta para o cliente"></textarea></label>
           ${S.reviewErr?`<p class="err">${esc(S.reviewErr)}</p>`:""}
           <div class="actions"><button class="btn brand" data-act="submit-comment" ${S.busy?"disabled":""}>Responder</button></div>`
@@ -358,6 +358,11 @@ document.addEventListener("dragstart",ev=>{const t=ev.target.closest?.("[data-dr
 document.addEventListener("dragover",ev=>{const z=ev.target.closest?.("[data-drop]");if(z){ev.preventDefault();z.classList.add("over")}});
 document.addEventListener("dragleave",ev=>{const z=ev.target.closest?.("[data-drop]");if(z&&!z.contains(ev.relatedTarget))z.classList.remove("over")});
 document.addEventListener("drop",ev=>{const z=ev.target.closest?.("[data-drop]");if(!z)return;ev.preventDefault();const st=ev.dataTransfer.getData("text/plain");if(ST[st]&&st!=="pendente"&&!S.isOwner){S.popped=S.open;submitReview(st);setTimeout(()=>{S.popped=null},600)}});
+async function clearSticker(id){
+  if(S.busy)return; S.busy=true;
+  try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/clear`,{method:"POST"});applyPost(r.post);S.pick=null;render();renderSheet();toast("Sticker removido")}catch(e){toast(e.message)}
+  S.busy=false;
+}
 async function resend(id){
   try{const r=await api(`/api/admin/clients/${S.clientId}/posts/${id}/resend`,{method:"POST"});applyPost(r.post);render();renderSheet();toast("Peça reenviada para aprovação")}catch(e){toast(e.message)}
 }
@@ -522,7 +527,8 @@ document.addEventListener("click",async ev=>{
     case "cover": S.showCover=b.dataset.k==="1"; renderSheet(); break;
     case "rm-cover": S.editor.data.cover=null; renderSheet(); break;
     case "capmore": S.capMore=true; renderSheet(); break;
-    case "pick": if(!S.isOwner)placeSticker(b.dataset.s,b.querySelector(".mini")); break;
+    case "pick": if(S.isOwner)break; if(statusOf(S.open)===b.dataset.s){if(b.dataset.s==="alteracao"){S.commentOpen=true;renderSheet();setTimeout(()=>$("#note")?.focus(),50)}else toast("Essa arte já está com esse sticker");break} placeSticker(b.dataset.s,b.querySelector(".mini")); break;
+    case "clear-stk": clearSticker(b.dataset.id); break;
     case "submit-comment": submitComment(); break;
     case "close-comment": S.commentOpen=false; renderSheet(); break;
     case "resend": resend(b.dataset.id); break;

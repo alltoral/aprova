@@ -243,6 +243,7 @@ async function handle(req, env) {
         if (parts[2] === "review") {
           const status = body.status;
           if (!["aprovado", "alteracao", "reprovado"].includes(status)) return fail("Escolha um sticker");
+          if (post.review?.status === status && !note) return json({ post });
           const review = addHistory(post, { kind: "review", status, note, byLabel: name, at });
           Object.assign(review, { status, note, byLabel: name, at });
           post.review = review;
@@ -379,6 +380,11 @@ async function handle(req, env) {
           if (!e && method === "PUT") {
             const body = await readBody(req);
             const post = cleanPost(body, prev, b);
+            const ids = (x) => [...(x.media || []).map((m) => m.id), x.cover?.id || ""].join("|");
+            if (ids(post) !== ids(prev) && post.review?.status && post.review.status !== "pendente") {
+              post.review = addHistory(post, { kind: "review", status: "pendente", note: "Nova arte enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
+              Object.assign(post.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            }
             await db.setJSON(key, post);
             return json({ post });
           }
@@ -386,8 +392,8 @@ async function handle(req, env) {
             await db.delete(key);
             return json({ ok: true });
           }
-          if (e === "resend" && method === "POST") {
-            prev.review = addHistory(prev, { kind: "review", status: "pendente", note: "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
+          if ((e === "resend" || e === "clear") && method === "POST") {
+            prev.review = addHistory(prev, { kind: "review", status: "pendente", note: e === "clear" ? "Sticker removido pelo estúdio" : "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
             await db.setJSON(key, prev);
             return json({ post: prev });
