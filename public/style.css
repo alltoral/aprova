@@ -20,7 +20,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 ::selection{background:var(--pink);color:#fff}
-.wrap{max-width:1180px;margin:0 auto;padding-inline:20px}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;width:100%;box-sizing:border-box}
 @media (max-width:520px){.wrap{padding-inline:16px}}
 
 /* barra rosa com a logo */
@@ -357,3 +357,12 @@ textarea:focus,input:focus,select:focus{border-color:var(--pink);outline:none;bo
 .dl-box b{font-size:14px;color:#0c6b3a}
 .dl-list{display:flex;flex-wrap:wrap;gap:8px}
 .dl-list .btn{text-decoration:none}
+.pubbox{background:#141014;color:var(--pink);border:0;border-radius:12px;padding:8px 14px;display:grid;text-align:left;cursor:pointer;min-width:150px;box-shadow:0 6px 16px -8px rgba(0,0,0,.5);transition:transform .15s}
+.pubbox:hover{transform:translateY(-2px)}
+.pubbox span{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#fff;opacity:.8}
+.pubbox b{font-family:var(--f-display);font-size:18px;line-height:1.15}
+.pub-head{margin:6px 0 18px}
+.pub-head h2{font-size:clamp(26px,4vw,38px);margin:0 0 4px}
+.pub-head h2 em{color:var(--pink)}
+.pub-head p{margin:0;color:var(--muted)}
+@media (max-width:520px){.stats.two{grid-template-columns:repeat(2,minmax(0,1fr))}.pubbox{width:100%}}

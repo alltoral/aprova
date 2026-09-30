@@ -287,10 +287,11 @@ async function handle(req, env) {
         const clients = await listJSON(db, "clients/");
         const withCounts = await Promise.all(
           clients.map(async (cl) => {
-            const posts = (await listJSON(db, `posts/${cl.id}/`)).filter((p) => p.visible !== false);
+            const all = (await listJSON(db, `posts/${cl.id}/`)).filter((p) => p.visible !== false);
+            const posts = all.filter((p) => !p.published);
             const counts = { pendente: 0, aprovado: 0, alteracao: 0, reprovado: 0, ajustado: 0 };
             posts.forEach((p) => counts[STATUSES.includes(p.review?.status) ? p.review.status : "pendente"]++);
-            return { ...cl, counts };
+            return { ...cl, counts: { ...counts, publicado: all.length - posts.length } };
           })
         );
         return json({ clients: withCounts.sort((x, y) => x.name.localeCompare(y.name)) });

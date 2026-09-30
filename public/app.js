@@ -122,7 +122,7 @@ function pendingCount(){
   if(!S.ready||S.loadErr)return null;
   if(S.mode==="admin"&&!S.pass)return null;
   if(S.mode==="admin"&&!S.clientId)return S.clientList.reduce((t,c)=>t+(c.counts?.pendente||0)+(c.counts?.ajustado||0),0);
-  if(S.client){const n=counts(visiblePosts());return n.pendente+n.ajustado}
+  if(S.client){const n=counts(visiblePosts().filter(p=>!p.published));return n.pendente+n.ajustado}
   return null;
 }
 function bar(){
@@ -138,7 +138,7 @@ function adminHome(){
   const cards=list.map(c=>`<button class="ccard" data-act="go" data-id="${c.id}">
       <div class="sw" style="background:${esc(c.color||"#e55496")};color:${inkFor(c.color||"#e55496")}">${avatar(c)}<div class="eyebrow" style="color:inherit;opacity:.8">${esc(c.nicho||"Cliente")}</div></div>
       <div class="body"><div class="name">${esc(c.name)}</div>
-      <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span>${c.counts?.ajustado?`<span><b>${c.counts.ajustado}</b> ajustados</span>`:""}</div></div>
+      <div class="counts"><span><b>${c.counts?.pendente||0}</b> aguardando</span><span><b>${c.counts?.aprovado||0}</b> aprovados</span><span><b>${(c.counts?.alteracao||0)+(c.counts?.reprovado||0)}</b> com ajustes</span>${c.counts?.ajustado?`<span><b>${c.counts.ajustado}</b> ajustados</span>`:""}${c.counts?.publicado?`<span><b>${c.counts.publicado}</b> publicados</span>`:""}</div></div>
     </button>`).join("");
   return bar()+`<main class="wrap">
     <section class="hero"><p class="eyebrow">Painel do estúdio</p><h1 class="display">Tudo que está <span class="script">em aprovação</span></h1>
@@ -153,34 +153,42 @@ function avatar(c,cls=""){
 }
 
 function clientPage(c){
-  const all=visiblePosts();
+  const every=visiblePosts(); const pubs=every.filter(p=>p.published).sort((a,b)=>String(b.published.at).localeCompare(String(a.published.at)));
+  const onPub=S.view==="pub";
+  const all=onPub?pubs:every.filter(p=>!p.published);
   const n=counts(all);
   const byTab=all.filter(p=>S.tab==="all"||(S.tab==="ads"?isAd(p):netOf(p)===S.tab));
-  const list=byTab.filter(p=>S.filter==="all"||(S.filter==="publicado"?!!p.published:statusOf(p.id)===S.filter));
+  const matchF=p=>{const st=statusOf(p.id);return S.filter==="all"||(S.filter==="aguardando"?st!=="aprovado":st===S.filter)};
+  const list=onPub?byTab:byTab.filter(matchF);
   const nets=clientNets(c); const adsN=all.filter(isAd).length;
   const tab=(k,l,num)=>`<button class="tab" role="tab" aria-selected="${S.tab===k}" data-act="tab" data-k="${k}">${l}<span class="n">${num}</span></button>`;
-  const chip=(k,l)=>`<button class="chip" aria-pressed="${S.filter===k}" data-act="filter" data-k="${k}">${k==="publicado"?`<i class="dot" style="background:#141014"></i>`:k!=="all"?`<i class="dot" style="background:${ST[k].color}"></i>`:""}${l}</button>`;
+  const chip=(k,l)=>`<button class="chip" aria-pressed="${S.filter===k}" data-act="filter" data-k="${k}">${k==="aguardando"?`<i class="dot" style="background:${ST.pendente.color}"></i>`:k!=="all"?`<i class="dot" style="background:${ST[k].color}"></i>`:""}${l}</button>`;
+  const pubBox=`<button class="pubbox" data-act="view" data-k="${onPub?"main":"pub"}">${onPub?`<span>← Voltar</span><b>Conteúdos para aprovar</b>`:`<span>${pubs.length} ${pubs.length===1?"conteúdo":"conteúdos"}</span><b>Conteúdos publicados</b>`}</button>`;
   const link=location.origin+"/c/"+(c.token||"");
   return bar(true)+`
   ${S.isOwner||store.get("aprov_admin")?`<div class="wrap"><button class="back" data-act="home">← ${S.isOwner?"Todos os clientes":"Voltar ao painel do estúdio"}</button></div>`:""}
   <section class="chero" style="margin-top:${S.isOwner||store.get("aprov_admin")?"14px":"0"}"><div class="wrap">
     ${avatar(c)}
     <div class="who"><span class="eyebrow">Aprovação de conteúdo</span><h1 class="display">${esc(c.name)}</h1>${c.handle?`<span class="handle">${esc(c.handle)}</span>`:""}</div>
-    <div class="stats">
+    ${onPub?"":S.isOwner?`<div class="stats">
       <div class="stat"><b>${n.pendente}</b><span>Aguardando</span></div>
       <div class="stat"><b>${n.aprovado}</b><span>Aprovados</span></div>
       <div class="stat"><b>${n.alteracao}</b><span>Ajustes</span></div>
       <div class="stat"><b>${n.reprovado}</b><span>Repensar</span></div>
       <div class="stat"><b>${n.ajustado}</b><span>Ajustados</span></div>
-    </div>
+    </div>`:`<div class="stats two">
+      <div class="stat"><b>${all.length-n.aprovado}</b><span>Aguardando</span></div>
+      <div class="stat"><b>${n.aprovado}</b><span>Aprovados</span></div>
+    </div>`}
+    ${pubBox}
   </div></section>
   <main class="wrap">
     ${S.isOwner?`<div class="tools"><button class="btn pri" data-act="new-post">+ Nova peça</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed==="token"?"danger":""}" data-act="new-token">${S.armed==="token"?"confirmar: o link antigo para de funcionar":"gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`:""}
     <div class="tabs" role="tablist">${tab("all","Tudo",all.length)}${nets.filter(k=>S.isOwner||all.some(p=>netOf(p)===k)).map(k=>tab(k,NETS[k],all.filter(p=>netOf(p)===k).length)).join("")}${c.ads||adsN?tab("ads","Anúncios",adsN):""}</div>
-    <div class="filters">${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}${all.some(p=>p.published)?chip("publicado","Publicados"):""}</div>
+    ${onPub?`<div class="pub-head"><h2 class="display">Conteúdos <em>publicados</em></h2><p>Tudo que já foi ao ar, com os arquivos para baixar.</p></div>`:`<div class="filters">${S.isOwner?`${chip("all","Todos")}${chip("pendente","Aguardando")}${chip("aprovado","Aprovados")}${chip("alteracao","Ajustes")}${chip("reprovado","Repensar")}${chip("ajustado","Ajustados")}`:`${chip("all","Todos")}${chip("aguardando","Aguardando")}${chip("aprovado","Aprovados")}`}</div>`}
     ${list.length?`<div class="grid">${list.map(postCard).join("")}</div>`:
-      `<div class="emptybox"><h3>${all.length?"Nada neste filtro":"Nenhuma peça ainda"}</h3><p>${all.length?"Troque o filtro para ver as outras peças.":S.isOwner?"Suba a primeira arte com legenda e, se for anúncio, a segmentação.":"Assim que o estúdio enviar as peças, elas aparecem aqui para você aprovar."}</p>${S.isOwner&&!all.length?`<button class="btn pri" data-act="new-post">+ Nova peça</button>`:""}</div>`}
+      `${onPub&&!all.length?`<div class="emptybox"><h3>Nada publicado ainda</h3><p>Quando uma peça for ao ar, ela aparece aqui.</p></div>`:""}${onPub&&!all.length?"":`<div class="emptybox"><h3>${all.length?"Nada neste filtro":"Nenhuma peça ainda"}</h3><p>${all.length?"Troque o filtro para ver as outras peças.":S.isOwner?"Suba a primeira arte com legenda e, se for anúncio, a segmentação.":"Assim que o estúdio enviar as peças, elas aparecem aqui para você aprovar."}</p>${S.isOwner&&!all.length?`<button class="btn pri" data-act="new-post">+ Nova peça</button>`:""}</div>`}`}
   </main>`+foot();
 }
 function mediaEl(m,alt,player,cover){
@@ -547,6 +555,7 @@ document.addEventListener("click",async ev=>{
     case "new-token": if(S.armed==="token")newToken();else{S.armed="token";render()} break;
     case "tab": S.tab=b.dataset.k; render(); break;
     case "filter": S.filter=b.dataset.k; render(); break;
+    case "view": S.view=b.dataset.k; S.tab="all"; S.filter="all"; render(); window.scrollTo(0,0); break;
     case "open": openPost(b.dataset.id); break;
     case "close": closeSheet(); break;
     case "slide": S.slide+=Number(b.dataset.d); renderSheet(); break;
@@ -627,7 +636,7 @@ function parseRoute(){
   else store.set("aprov_last",location.pathname);
 }
 function navigate(path){history.pushState({},"",path);route()}
-function route(){parseRoute();S.tab="all";S.filter="all";S.client=null;S.posts=[];closeSheet();window.scrollTo(0,0);load()}
+function route(){parseRoute();S.tab="all";S.filter="all";S.view="main";S.client=null;S.posts=[];closeSheet();window.scrollTo(0,0);load()}
 window.addEventListener("popstate",route);
 /* deslizar para trocar a arte do carrossel no celular */
 let swX=null;
