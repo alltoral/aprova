@@ -424,5 +424,9 @@ textarea:focus,input:focus,select:focus{border-color:var(--pink);outline:none;bo
 .hero-band{background:var(--yellow);color:#141014}
 .hero-band .hero p{color:#3a3320}
 .hero-band .hero .eyebrow{color:#141014;opacity:.75}
-.hero-band .hero .script{color:var(--pink-deep)}
+.hero-band .hero .script{color:#fff}
 .hero-band .hero .hint{color:#3a3320;display:block;margin-top:8px}
+.hero-band .hero{position:relative}
+.brief-btn{position:absolute;top:24px;right:0;background:#141014;color:var(--yellow);border-color:#141014}
+.brief-btn:hover{background:#000;color:var(--yellow)}
+@media (max-width:760px){.brief-btn{position:static;justify-self:start;margin-top:4px}}
