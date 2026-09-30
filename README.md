@@ -57,3 +57,7 @@ npm install
 echo "ADMIN_PASSWORD=teste" > .dev.vars
 npm run dev
 ```
+
+## Atualizações do app
+
+Antes de publicar uma mudança em `public/`, rode `./scripts/bump-version.sh`. Ele marca uma versão nova em `public/version.json`, e o app aberto nos aparelhos percebe em até 1 minuto e se atualiza sozinho (sem interromper quem estiver preenchendo algo).
