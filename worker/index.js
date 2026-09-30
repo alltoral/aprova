@@ -395,7 +395,8 @@ async function handle(req, env) {
             return json({ ok: true });
           }
           if ((e === "resend" || e === "clear") && method === "POST") {
-            prev.review = addHistory(prev, { kind: "review", status: "pendente", note: e === "clear" ? "Sticker removido pelo estúdio" : "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
+            /* remover o sticker é bastidor: não entra no histórico */
+            prev.review = e === "clear" ? { ...(prev.review || {}), history: prev.review?.history || [] } : addHistory(prev, { kind: "review", status: "pendente", note: "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
             await db.setJSON(key, prev);
             return json({ post: prev });

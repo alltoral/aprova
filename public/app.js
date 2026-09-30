@@ -255,7 +255,7 @@ function igPreview(p,c){
 function row(l,v){return v?`<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`:""}
 function postSheet(p,c){
   const st=statusOf(p.id); const r=reviewOf(p.id); const ad=isAd(p)?(p.ad||{}):null;
-  const hist=(r?.history||[]).slice().reverse();
+  const hist=(r?.history||[]).filter(h=>h.note!=="Sticker removido pelo estúdio").slice().reverse();
   const canAct=S.canReview;
   const age=ad?[ad.idadeMin,ad.idadeMax].filter(Boolean).join(" a "):"";
   const mob=MOB()&&!S.isOwner;
