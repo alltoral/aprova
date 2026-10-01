@@ -14,7 +14,7 @@ const IDEA_ST = {
   pendente:  { label: "Aguardando você", cls: "wait" },
   aprovado:  { label: "Ideia aprovada", cls: "ok" },
   alteracao: { label: "Ajuste pedido", cls: "adj" },
-  reprovado: { label: "Novas ideias", cls: "bad" },
+  reprovado: { label: "Repensar", cls: "bad" },
   ajustado:  { label: "Ajuste feito", cls: "fix" }
 };
 const ideaSt = i => i.review?.status || "pendente";
@@ -228,7 +228,7 @@ function planViewSheet() {
       <div class="pv-body pv-done">${progressBar(p)}${lk("ta-no-plano", "Tá no plano!", "done-stk")}
       <h2 id="pvd">${ok === (p.ideas || []).length ? esc(P.done).replace(/ (\S+)$/, " <em>$1</em>") : "Tudo <em>decidido!</em>"}</h2>
       <p>${ok === (p.ideas || []).length ? "Agora o time começa a criar as artes e os vídeos. Elas chegam aqui pra você aprovar." : "O estúdio já recebeu seus ajustes. As ideias aprovadas já vão para a criação."}</p>
-      <div class="done-n"><div class="ms ms-g"><b>${ok}</b><span>${ok === 1 ? "aprovada" : "aprovadas"}</span></div><div class="ms ms-y"><b>${cnt("alteracao")}</b><span>com ajuste</span></div><div class="ms"><b>${cnt("reprovado")}</b><span>novas ideias</span></div></div>
+      <div class="done-n"><div class="ms ms-g"><b>${ok}</b><span>${ok === 1 ? "aprovada" : "aprovadas"}</span></div><div class="ms ms-y"><b>${cnt("alteracao")}</b><span>com ajuste</span></div><div class="ms"><b>${cnt("reprovado")}</b><span>repensar</span></div></div>
       <button class="btn dark2 wide" data-act="close">Voltar para a página</button><button class="link" data-act="plan-cal">Ver o calendário</button></div></div>`;
   }
   /* card: uma ideia por vez */
@@ -239,7 +239,7 @@ function planViewSheet() {
     <div class="pv-body">${progressBar(p, k)}
     <div class="deck"><div class="deck-b2"></div><div class="deck-b1"></div>
     <article class="icard ${e.fly ? "fly-" + e.fly : ""}" id="icard">
-      ${st !== "pendente" ? `<div class="ic-stk">${st === "ajustado" ? lk("ajuste-feito", "Ajuste feito") : st === "reprovado" ? lk("novas-ideias", "Me traga novas ideias") : sticker(st)}</div>` : ""}
+      ${st !== "pendente" ? `<div class="ic-stk">${st === "ajustado" ? lk("ajuste-feito", "Ajuste feito") : sticker(st)}</div>` : ""}
       <div class="ic-top"><span class="fpill ${FMT_CLS[i.format] || "f-post"}">${esc(i.format)}</span><span class="ic-date">${i.date ? esc(fmtDate(i.date)) : "Sem data"}</span></div>
       <h2 id="pvc">${esc(i.title)}</h2>
       ${i.idea ? `<div class="ic-b"><span class="eyebrow">A ideia</span><p>${esc(i.idea)}</p></div>` : ""}
@@ -249,7 +249,7 @@ function planViewSheet() {
     </article></div>
     <div class="ic-nav"><button class="btn sm ghost" data-act="plan-step" data-d="-1" ${k === 0 ? "disabled" : ""}>‹ Anterior</button><span>${S.isOwner ? "" : "Toque num adesivo para decidir"}</span><button class="btn sm ghost" data-act="plan-step" data-d="1" ${k === ideas.length - 1 ? "disabled" : ""}>Próxima ›</button></div>
     ${S.isOwner ? "" : e.ask ? askBox(e) : `<div class="dec">
-      <button class="dec-b" data-act="idea-dec" data-s="reprovado" aria-pressed="${st === "reprovado"}" ${S.busy ? "disabled" : ""}>${lk("novas-ideias", "")}<span>Novas ideias</span></button>
+      <button class="dec-b" data-act="idea-dec" data-s="reprovado" aria-pressed="${st === "reprovado"}" ${S.busy ? "disabled" : ""}>${sticker("reprovado")}<span>Repensar</span></button>
       <button class="dec-b" data-act="idea-dec" data-s="alteracao" aria-pressed="${st === "alteracao"}" ${S.busy ? "disabled" : ""}>${sticker("alteracao")}<span>Ajustar</span></button>
       <button class="dec-b big" data-act="idea-dec" data-s="aprovado" aria-pressed="${st === "aprovado"}" ${S.busy ? "disabled" : ""}>${sticker("aprovado")}<span>Aprovar</span></button></div>`}
     ${e.err ? `<p class="err" style="text-align:center">${esc(e.err)}</p>` : ""}
@@ -262,7 +262,7 @@ function askBox(e) {
     ${chips.length ? `<div class="ask-chips">${chips.map(c => `<button class="chip" data-act="ask-chip" data-k="${c}" aria-pressed="${(e.chips || []).includes(c)}">${c}</button>`).join("")}</div>` : ""}
     <textarea id="idea-note" rows="3" placeholder="${adj ? "Ex.: troca a banana por morango" : "Ex.: queria algo mais de bastidores"}">${esc(e.note || "")}</textarea></label>
     <label class="field"><span>Seu nome</span><input type="text" id="who" value="${esc(S.who)}" placeholder="Quem está decidindo" autocomplete="name"></label>
-    <div class="actions"><button class="btn ghost" data-act="ask-cancel">Cancelar</button><button class="btn pri" data-act="ask-send" ${S.busy ? "disabled" : ""}>${adj ? "Enviar ajuste" : "Pedir novas ideias"}</button></div></div>`;
+    <div class="actions"><button class="btn ghost" data-act="ask-cancel">Cancelar</button><button class="btn pri" data-act="ask-send" ${S.busy ? "disabled" : ""}>${adj ? "Enviar ajuste" : "Repensar a ideia"}</button></div></div>`;
 }
 function progressBar(p, cur) {
   return `<div class="pbar">${(p.ideas || []).map((i, k) => `<i class="${IDEA_ST[ideaSt(i)].cls}${k === cur ? " cur" : ""}"></i>`).join("")}</div>`;
@@ -303,7 +303,7 @@ async function decideIdea(status, note) {
     const any = ideas.findIndex(isOpenIdea);
     e.fly = null; e.note = ""; e.chips = [];
     if (next >= 0) e.idx = next; else if (any >= 0) e.idx = any; else { e.step = "done"; e.keepScroll = false; }
-    toast(status === "aprovado" ? "Ideia aprovada" : status === "alteracao" ? "Ajuste enviado para o estúdio" : "Pedido de novas ideias enviado");
+    toast(status === "aprovado" ? "Ideia aprovada" : status === "alteracao" ? "Ajuste enviado para o estúdio" : "Pedido para repensar enviado");
   } catch (err) { i.review = prev; e.fly = null; e.err = err.message; }
   S.busy = false; renderSheet(); render();
 }
@@ -318,7 +318,7 @@ function plansAdmin() {
       <div class="pl-h"><span class="fpill ${p.visible === false ? "f-draft" : "f-post"}">${p.visible === false ? "Rascunho" : (PERIODS[p.period] || PERIODS.semanal).tag}</span><small>${p.visible === false ? "Só você vê" : p.seenAt ? "Visto em " + esc(fmtStamp(p.seenAt)) : "Cliente ainda não abriu"}</small></div>
       <h3>${esc(fmtRange(p.start, p.end))}</h3>
       ${progressBar(p)}
-      <div class="pl-n"><span><b>${cnt("aprovado")}</b> aprovadas</span><span><b>${planOpen(p)}</b> aguardando</span><span><b>${cnt("alteracao")}</b> ajustes</span><span><b>${cnt("reprovado")}</b> novas ideias</span>${p.deadline ? `<span>Prazo ${esc(fmtDeadline(p.deadline))}</span>` : ""}</div>
+      <div class="pl-n"><span><b>${cnt("aprovado")}</b> aprovadas</span><span><b>${planOpen(p)}</b> aguardando</span><span><b>${cnt("alteracao")}</b> ajustes</span><span><b>${cnt("reprovado")}</b> repensar</span>${p.deadline ? `<span>Prazo ${esc(fmtDeadline(p.deadline))}</span>` : ""}</div>
       ${asks.length ? `<div class="pl-asks">${asks.slice(0, 3).map(i => `<div><b>${esc(i.title)}</b>${i.review?.note ? `<p>“${esc(i.review.note)}”</p>` : `<p class="muted">${esc(IDEA_ST[ideaSt(i)].label)}</p>`}</div>`).join("")}</div>` : ""}
       <div class="rq-a"><button class="btn sm pri" data-act="plan-edit" data-id="${p.id}">Abrir e editar</button><button class="btn sm" data-act="plan-preview" data-id="${p.id}">Ver como o cliente</button>${p.visible !== false ? `<button class="btn sm" data-act="copy-link" data-link="${esc(location.origin + "/c/" + (c.token || "") + "/planejamento")}" data-msg="Link do planejamento copiado">Copiar link</button>` : ""}<button class="link ${S.armed === "pl" + p.id ? "danger" : ""}" data-act="plan-del" data-id="${p.id}">${S.armed === "pl" + p.id ? "confirmar exclusão" : "Excluir"}</button></div></article>`;
   };
@@ -477,7 +477,7 @@ function adminAlerts(list) {
   list.forEach(c => {
     const a = c.alerts || {};
     (a.due || []).forEach(d => cards.push({ t: Date.parse(d.deadline), html: `<button class="al al-due" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${Date.parse(d.deadline) < Date.now() ? "Venceu " : "Vence "}${esc(fmtDeadline(d.deadline))}</span><b>Planejamento de ${esc(firstName(c))}</b><small>${d.open} de ${d.total} ${d.total === 1 ? "ideia" : "ideias"} sem resposta</small></span>${lk("prazo-estourando", "Prazo estourando", "al-stk")}</button>` }));
-    if (a.reply) { const r = a.reply; const what = r.kind === "comment" ? "comentou" : r.status === "alteracao" ? "pediu ajuste" : r.status === "reprovado" ? (r.where === "plan" ? "pediu novas ideias" : "pediu para repensar") : "respondeu"; cards.push({ t: Date.parse(r.at), html: `<button class="al" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${esc(fmtStamp(r.at))}</span><b>${esc(firstName(c))} ${what}</b><small>${r.note ? "“" + esc(r.note.slice(0, 70)) + "” · " : ""}${esc(r.title || "")}</small></span>${lk("cliente-respondeu", "Cliente respondeu", "al-stk")}</button>` }); }
+    if (a.reply) { const r = a.reply; const what = r.kind === "comment" ? "comentou" : r.status === "alteracao" ? "pediu ajuste" : r.status === "reprovado" ? "pediu para repensar" : "respondeu"; cards.push({ t: Date.parse(r.at), html: `<button class="al" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${esc(fmtStamp(r.at))}</span><b>${esc(firstName(c))} ${what}</b><small>${r.note ? "“" + esc(r.note.slice(0, 70)) + "” · " : ""}${esc(r.title || "")}</small></span>${lk("cliente-respondeu", "Cliente respondeu", "al-stk")}</button>` }); }
     (a.posted || []).forEach(p => cards.push({ t: Date.parse(p.at), html: `<button class="al" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${esc(fmtStamp(p.at))}</span><b>Post de ${esc(c.name)}</b><small>${esc(p.title)} foi ao ar</small></span>${lk("postado", "Postado", "al-stk")}</button>` }));
   });
   if (!cards.length) return "";
@@ -552,7 +552,7 @@ document.addEventListener("change", ev => {
 document.addEventListener("dragover", ev => { const z = ev.target.closest?.(".pa-drop"); if (z) { ev.preventDefault(); z.classList.add("over"); } });
 document.addEventListener("dragleave", ev => { const z = ev.target.closest?.(".pa-drop"); if (z && !z.contains(ev.relatedTarget)) z.classList.remove("over"); });
 document.addEventListener("drop", ev => { const z = ev.target.closest?.(".pa-drop"); if (!z) return; ev.preventDefault(); const f = ev.dataTransfer.files?.[0]; if (f && S.editor?.kind === "plan") { S.editor.fileName = f.name; f.text().then(runPlanParse); } });
-/* deslizar o card da ideia no celular: direita aprova, esquerda pede novas ideias */
+/* deslizar o card da ideia no celular: direita aprova, esquerda pede para repensar */
 let icX = null, icY = null;
 document.addEventListener("touchstart", ev => { if (ev.target.closest?.("#icard") && ev.touches.length === 1) { icX = ev.touches[0].clientX; icY = ev.touches[0].clientY; } }, { passive: true });
 document.addEventListener("touchend", ev => {
