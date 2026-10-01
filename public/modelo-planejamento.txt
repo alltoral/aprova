@@ -1,0 +1,26 @@
+# Modelo de planejamento · Aprova All Toral
+# Uma ideia por bloco. Separe cada ideia com uma linha só com ---
+# Data: 08/10/2026 09:00 (sem data, o app espalha as ideias pelo período)
+# Formato: Post, Carrossel, Reels, Stories ou Anúncio
+# Descrição e Legenda podem ter várias linhas.
+
+Data: 06/10/2026 08:00
+Formato: Post
+Ideia: Minha manhã em 5 passos
+Descrição:
+Rotina real, sem filtro: os 5 passos que fazem o dia começar com energia.
+Legenda:
+Acordar cedo não é sobre disciplina, é sobre ter um motivo.
+Esses são os 5 passos que mudaram minhas manhãs. Salva pra testar amanhã!
+Hashtags: #rotina #manha #bemestar
+
+---
+
+Data: 08/10/2026 18:00
+Formato: Reels
+Ideia: Treino de 20 minutos em casa
+Descrição:
+Gancho: "Sem academia, sem desculpa." 4 exercícios em tela dividida com cronômetro.
+Legenda:
+Sem academia, sem desculpa. 20 minutos, 4 exercícios e zero equipamento.
+Hashtags: #treinoemcasa #fitness

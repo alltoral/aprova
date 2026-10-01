@@ -5,6 +5,9 @@ const CHUNK = 1900000; /* cada parte enviada ao servidor (limite de 2 MB por lin
 const MAX_FILE = 200 * 1024 * 1024; /* limite por arquivo (vídeos) */
 const NETWORKS = ["instagram", "facebook", "tiktok", "linkedin", "youtube", "pinterest", "x", "whatsapp"];
 const FORMATS = ["4x5", "1x1", "9x16", "16x9"];
+const PLAN_PERIODS = ["semanal", "quinzenal", "mensal"];
+const IDEA_FORMATS = ["Post", "Carrossel", "Reels", "Stories", "Anúncio"];
+const IDEA_STATUSES = ["pendente", "aprovado", "alteracao", "reprovado", "ajustado"];
 const MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml", "video/mp4", "video/quicktime"];
 
 const json = (data, status = 200) =>
@@ -135,6 +138,7 @@ function cleanPost(body, prev, clientId) {
     updatedAt: now(),
     review: prev?.review || { status: "pendente", history: [] },
     published: prev?.published || null,
+    sentAt: prev?.sentAt || (body.visible !== false ? now() : null),
   };
   if (ad) {
     const keys = ["objetivo", "posicionamentos", "local", "idadeMin", "idadeMax", "genero", "publicoCustom", "interesses", "orcamento", "orcTipo", "inicio", "fim", "headline", "cta", "descricao", "url"];
@@ -153,10 +157,14 @@ function cleanClient(body, prev) {
     name: str(body.name, 120).trim(),
     handle,
     nicho: str(body.nicho, 80),
+    nickname: typeof body.nickname === "string" ? str(body.nickname, 60).trim() : prev?.nickname || "",
     color,
     networks: Array.isArray(body.networks) ? [...new Set(body.networks.filter((n) => NETWORKS.includes(n)))] : prev?.networks || ["instagram"],
     ads: typeof body.ads === "boolean" ? body.ads : !!prev?.ads,
     logoId: typeof body.logoId === "string" && prev?.id && body.logoId.startsWith(prev.id + "/") ? body.logoId : body.logoId === "" ? "" : prev?.logoId || "",
+    planPeriod: PLAN_PERIODS.includes(body.planPeriod) ? body.planPeriod : prev?.planPeriod || "semanal",
+    visits: prev?.visits || null,
+    welcomedAt: prev?.welcomedAt || null,
     createdAt: prev?.createdAt || now(),
     updatedAt: now(),
   };
@@ -165,6 +173,85 @@ function cleanClient(body, prev) {
 function publicClient(c) {
   const { token: _t, ...rest } = c;
   return rest;
+}
+
+/* ---------- planejamento: ideias e legendas aprovadas antes da arte ---------- */
+const isDay = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+function cleanIdea(x, prev) {
+  const fmt = IDEA_FORMATS.includes(x?.format) ? x.format : "Post";
+  return {
+    id: prev?.id || (safeId(x?.id) ? x.id : rid(8)),
+    date: str(x?.date, 20),
+    format: fmt,
+    title: str(x?.title, 160).trim() || "Ideia sem título",
+    idea: str(x?.idea, 2000),
+    caption: str(x?.caption, 5000),
+    hashtags: str(x?.hashtags, 1000),
+    review: prev?.review || { status: "pendente", history: [] },
+  };
+}
+const ideaText = (i) => [i.date, i.format, i.title, i.idea, i.caption, i.hashtags].join("|");
+function cleanPlan(body, prev, clientId) {
+  const prevIdeas = new Map((prev?.ideas || []).map((i) => [i.id, i]));
+  const ideas = (Array.isArray(body.ideas) ? body.ideas : []).slice(0, 60).map((x) => {
+    const old = safeId(x?.id) ? prevIdeas.get(x.id) : null;
+    const idea = cleanIdea(x, old);
+    /* o estúdio mexeu numa ideia que o cliente pediu ajuste: volta para ele como "ajuste feito" */
+    const st = old?.review?.status;
+    if (old && (st === "alteracao" || st === "reprovado") && ideaText(old) !== ideaText(idea)) {
+      idea.review = addHistory(idea, { kind: "review", status: "ajustado", note: "Ajuste feito pelo estúdio", byLabel: "ALL TORAL", at: now() });
+      Object.assign(idea.review, { status: "ajustado", note: "", at: now(), byLabel: "ALL TORAL" });
+    }
+    return idea;
+  });
+  ideas.sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
+  const visible = body.visible !== false;
+  return {
+    id: prev?.id,
+    clientId,
+    period: PLAN_PERIODS.includes(body.period) ? body.period : prev?.period || "semanal",
+    start: isDay(body.start) ? body.start : prev?.start || "",
+    end: isDay(body.end) ? body.end : prev?.end || "",
+    deadline: str(body.deadline, 20),
+    note: str(body.note, 2000),
+    ideas,
+    visible,
+    createdAt: prev?.createdAt || now(),
+    updatedAt: now(),
+    sentAt: prev?.sentAt || (visible ? now() : null),
+    seenAt: prev?.seenAt || null,
+  };
+}
+const sortPlans = (list) => list.sort((a, b) => String(b.start || b.createdAt).localeCompare(String(a.start || a.createdAt)));
+const openIdeas = (plan) => (plan.ideas || []).filter((i) => ["pendente", "ajustado"].includes(i.review?.status || "pendente")).length;
+
+/* registra a visita do cliente: "prev" é a visita anterior (para saber o que chegou de novo) */
+async function touchVisit(db, client) {
+  const v = client.visits || { last: null, prev: null };
+  const t = Date.now();
+  const last = v.last ? Date.parse(v.last) : 0;
+  let changed = false;
+  if (!last || t - last > 30 * 60 * 1000) { v.prev = v.last || null; changed = true; }
+  if (changed || t - last > 5 * 60 * 1000) {
+    v.last = now();
+    client.visits = v;
+    await db.setJSON(`clients/${client.id}`, client);
+  }
+  return v;
+}
+
+/* avisos do painel: cliente respondeu, prazo estourando, postado e cliente sumido */
+function alertsFor(client, posts, plans) {
+  const t = Date.now(); const day = 24 * 60 * 60 * 1000;
+  const replies = [];
+  posts.forEach((p) => (p.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: p.title, where: "post", id: p.id }); }));
+  plans.forEach((pl) => (pl.ideas || []).forEach((i) => (i.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at && (h.note || h.status !== "aprovado")) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: i.title, where: "plan", id: pl.id }); })));
+  replies.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const reply = replies.find((r) => t - Date.parse(r.at) < 3 * day && (r.note || ["alteracao", "reprovado"].includes(r.status))) || null;
+  const due = plans.filter((pl) => pl.visible !== false && pl.deadline && openIdeas(pl) > 0 && Date.parse(pl.deadline) - t < day)
+    .map((pl) => ({ id: pl.id, deadline: pl.deadline, open: openIdeas(pl), total: (pl.ideas || []).length, start: pl.start, end: pl.end, period: pl.period }));
+  const posted = posts.filter((p) => p.published?.at && t - Date.parse(p.published.at) < day).map((p) => ({ id: p.id, title: p.title, at: p.published.at }));
+  return { reply, due, posted, lastVisit: client.visits?.last || null };
 }
 
 function addHistory(post, entry) {
@@ -241,7 +328,47 @@ async function handle(req, env) {
       if (method === "GET" && parts.length === 2) {
         const posts = sortPosts((await listJSON(db, `posts/${client.id}/`)).filter((p) => p.visible !== false));
         const requests = sortReqs(await listJSON(db, `requests/${client.id}/`));
-        return json({ client: publicClient(client), posts, requests });
+        const plans = sortPlans((await listJSON(db, `plans/${client.id}/`)).filter((p) => p.visible !== false));
+        const visits = await touchVisit(db, client);
+        return json({ client: publicClient(client), posts, requests, plans, visits: { prev: visits.prev, welcomed: !!client.welcomedAt } });
+      }
+      if (method === "POST" && parts[2] === "welcomed" && parts.length === 3) {
+        if (!client.welcomedAt) { client.welcomedAt = now(); await db.setJSON(`clients/${client.id}`, client); }
+        return json({ ok: true });
+      }
+      if (method === "POST" && parts[2] === "plan-seen" && parts.length === 3) {
+        const body = await readBody(req);
+        if (!safeId(body.planId)) return fail("Planejamento não encontrado", 404);
+        const key = `plans/${client.id}/${body.planId}`;
+        const plan = await db.get(key, { type: "json" });
+        if (!plan || plan.visible === false) return fail("Planejamento não encontrado", 404);
+        if (!plan.seenAt) { plan.seenAt = now(); await db.setJSON(key, plan); }
+        return json({ plan });
+      }
+      if (method === "POST" && parts[2] === "plan-review" && parts.length === 3) {
+        const body = await readBody(req);
+        if (!safeId(body.planId) || !safeId(body.ideaId)) return fail("Ideia não encontrada", 404);
+        const key = `plans/${client.id}/${body.planId}`;
+        const plan = await db.get(key, { type: "json" });
+        if (!plan || plan.visible === false) return fail("Planejamento não encontrado", 404);
+        const idea = (plan.ideas || []).find((i) => i.id === body.ideaId);
+        if (!idea) return fail("Ideia não encontrada", 404);
+        const status = body.status;
+        const note = str(body.note, 4000).trim();
+        const name = str(body.name, 80).trim() || client.name;
+        const at = now();
+        if (status === "comment") {
+          if (!note) return fail("Escreva o comentário");
+          idea.review = addHistory(idea, { kind: "comment", status: idea.review?.status || "pendente", note, byLabel: name, at });
+        } else {
+          if (!["aprovado", "alteracao", "reprovado"].includes(status)) return fail("Escolha um sticker");
+          idea.review = addHistory(idea, { kind: "review", status, note, byLabel: name, at });
+          Object.assign(idea.review, { status, note, byLabel: name, at });
+        }
+        if (!plan.seenAt) plan.seenAt = at;
+        plan.doneAt = openIdeas(plan) === 0 ? plan.doneAt || at : null;
+        await db.setJSON(key, plan);
+        return json({ plan });
       }
       if (method === "POST" && parts[2] === "request" && parts.length === 3) {
         const body = await readBody(req);
@@ -343,6 +470,34 @@ ${text}
         return json({ fields: null });
       }
 
+      /* lê um planejamento em texto livre e devolve a lista de ideias */
+      if (a === "parse-plan" && method === "POST") {
+        if (!env.AI) return json({ ideas: null });
+        const body = await readBody(req);
+        const text = str(body.text, 12000);
+        if (!text.trim()) return json({ ideas: null });
+        const ask = `Este texto é um planejamento de conteúdo para redes sociais. Separe cada conteúdo planejado e responda SOMENTE com um array JSON válido, sem comentários.
+Cada item: { "date": "AAAA-MM-DDTHH:MM" (se houver), "format": "Post" | "Carrossel" | "Reels" | "Stories" | "Anúncio", "title": "assunto curto", "idea": "descrição da ideia ou roteiro", "caption": "legenda completa, mantendo quebras de linha", "hashtags": "" }
+Não invente conteúdo que não está no texto.
+Texto:
+"""
+${text}
+"""`;
+        for (const model of ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct"]) {
+          try {
+            const r = await env.AI.run(model, { messages: [{ role: "user", content: ask }], max_tokens: 3500 });
+            const raw = r?.response ?? r;
+            const t = typeof raw === "object" && raw ? JSON.stringify(raw) : String(raw || "");
+            const m = t.match(/\[[\s\S]*\]/);
+            if (!m) continue;
+            const arr = JSON.parse(m[0]);
+            if (!Array.isArray(arr) || !arr.length) continue;
+            return json({ ideas: arr.slice(0, 60).map((x) => cleanIdea(x, null)) });
+          } catch (err) { /* tenta o próximo modelo */ }
+        }
+        return json({ ideas: null });
+      }
+
       /* sugestão de assunto para o título: lê a arte (miniatura) e a legenda com a IA do Cloudflare */
       if (a === "title" && method === "POST") {
         if (!env.AI) return json({ subject: "" });
@@ -378,7 +533,9 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const counts = { pendente: 0, aprovado: 0, alteracao: 0, reprovado: 0, ajustado: 0 };
             posts.forEach((p) => counts[STATUSES.includes(p.review?.status) ? p.review.status : "pendente"]++);
             const reqs = (await listJSON(db, `requests/${cl.id}/`)).filter((r) => r.status === "novo").length;
-            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs } };
+            const plans = (await listJSON(db, `plans/${cl.id}/`)).filter((p) => p.visible !== false);
+            const planOpen = plans.reduce((t, p) => t + openIdeas(p), 0);
+            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs, ideias: planOpen }, alerts: alertsFor(cl, all, plans) };
           })
         );
         return json({ clients: withCounts.sort((x, y) => x.name.localeCompare(y.name)) });
@@ -403,7 +560,48 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
         if (!c && method === "GET") {
           const posts = sortPosts(await listJSON(db, `posts/${b}/`));
           const requests = sortReqs(await listJSON(db, `requests/${b}/`));
-          return json({ client, posts, requests });
+          const plans = sortPlans(await listJSON(db, `plans/${b}/`));
+          return json({ client, posts, requests, plans });
+        }
+        if (c === "plans" && !d && method === "POST") {
+          const body = await readBody(req);
+          const plan = cleanPlan(body, null, b);
+          if (!plan.ideas.length) return fail("Adicione pelo menos uma ideia ao planejamento");
+          plan.id = rid(10);
+          await db.setJSON(`plans/${b}/${plan.id}`, plan);
+          if (client.planPeriod !== plan.period) { client.planPeriod = plan.period; client.updatedAt = now(); await db.setJSON(`clients/${b}`, client); }
+          return json({ plan, client });
+        }
+        if (c === "plans" && safeId(d)) {
+          const key = `plans/${b}/${d}`;
+          const prev = await db.get(key, { type: "json" });
+          if (!prev) return fail("Planejamento não encontrado", 404);
+          if (!e && method === "PUT") {
+            const body = await readBody(req);
+            const plan = cleanPlan(body, prev, b);
+            if (!plan.ideas.length) return fail("Adicione pelo menos uma ideia ao planejamento");
+            plan.doneAt = openIdeas(plan) === 0 ? prev.doneAt || now() : null;
+            await db.setJSON(key, plan);
+            return json({ plan });
+          }
+          if (!e && method === "DELETE") { await db.delete(key); return json({ ok: true }); }
+          const ideaId = parts[6];
+          const idea = safeId(ideaId) ? (prev.ideas || []).find((i) => i.id === ideaId) : null;
+          if (e === "ideas" && idea && parts[7] === "adjusted" && method === "POST") {
+            idea.review = addHistory(idea, { kind: "review", status: "ajustado", note: "Ajuste feito pelo estúdio", byLabel: "ALL TORAL", at: now() });
+            Object.assign(idea.review, { status: "ajustado", note: "", at: now(), byLabel: "ALL TORAL" });
+            prev.doneAt = null;
+            await db.setJSON(key, prev);
+            return json({ plan: prev });
+          }
+          if (e === "ideas" && idea && parts[7] === "comment" && method === "POST") {
+            const body = await readBody(req);
+            const note = str(body.note, 4000).trim();
+            if (!note) return fail("Escreva o comentário");
+            idea.review = addHistory(idea, { kind: "comment", status: idea.review?.status || "pendente", note, byLabel: "ALL TORAL", at: now() });
+            await db.setJSON(key, prev);
+            return json({ plan: prev });
+          }
         }
         if (c === "requests" && safeId(d)) {
           const key = `requests/${b}/${d}`;
@@ -428,6 +626,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
         if (!c && method === "DELETE") {
           await db.deletePrefix(`posts/${b}/`);
           await db.deletePrefix(`requests/${b}/`);
+          await db.deletePrefix(`plans/${b}/`);
           await media.deletePrefix(`${b}/`);
           if (client.token) await db.delete(`tokens/${client.token}`);
           await db.delete(`clients/${b}`);
@@ -490,6 +689,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const was = post.review?.status;
             if (ids(post) !== ids(prev) && was && was !== "pendente" && was !== "ajustado") {
               const to = was === "alteracao" || was === "reprovado" ? "ajustado" : "pendente";
+              post.sentAt = now();
               post.review = addHistory(post, { kind: "review", status: to, note: to === "ajustado" ? "Conteúdo ajustado pelo estúdio" : "Nova arte enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
               Object.assign(post.review, { status: to, note: "", at: now(), byLabel: "ALL TORAL" });
             }
@@ -502,6 +702,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           }
           if ((e === "resend" || e === "clear") && method === "POST") {
             /* remover o sticker é bastidor: não entra no histórico */
+            if (e === "resend") prev.sentAt = now();
             prev.review = e === "clear" ? { ...(prev.review || {}), history: prev.review?.history || [] } : addHistory(prev, { kind: "review", status: "pendente", note: "Nova versão enviada pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
             await db.setJSON(key, prev);
@@ -514,6 +715,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             return json({ post: prev });
           }
           if (e === "adjusted" && method === "POST") {
+            prev.sentAt = now();
             prev.review = addHistory(prev, { kind: "review", status: "ajustado", note: "Conteúdo ajustado pelo estúdio", byLabel: "ALL TORAL", at: now() });
             Object.assign(prev.review, { status: "ajustado", note: "", at: now(), byLabel: "ALL TORAL" });
             await db.setJSON(key, prev);
