@@ -1,6 +1,6 @@
 # Aprova All Toral
 
-Central de aprovação de posts e anúncios da ALL TORAL, com os stickers do Larot.
+Central de aprovação de posts e anúncios do ALL TORAL, com os stickers do Larot.
 
 - **Painel do estúdio** (`/admin`): protegido por senha. Você cadastra clientes (nome, @, redes, cor e logo), sobe artes, vídeos e capas, legenda e, nos anúncios, a segmentação.
 - **Página do cliente** (`/c/<link-secreto>`): cada cliente recebe um link que abre só a página dele. Ele toca no sticker e o status muda na hora. Em "Precisa de ajustes" abre a caixa de comentário.

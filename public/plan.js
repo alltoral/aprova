@@ -143,7 +143,7 @@ function monthCard() {
     const avg = waits.reduce((a, b) => a + b, 0) / waits.length; const hrs = avg / 36e5;
     third = `<div class="ms ms-g"><b>${hrs < 24 ? Math.max(1, Math.round(hrs)) + "h" : Math.round(hrs / 24) + (Math.round(hrs / 24) === 1 ? " dia" : " dias")}</b><span>pra aprovar</span></div>`;
   }
-  return `<section class="month"><div class="mo-h"><div><span class="eyebrow">${MONTHS[m]}</span><h2>Seu mês com a ALL TORAL</h2></div>${lk("mes-em-numeros", "Seu mês em números", "mo-stk")}</div>
+  return `<section class="month"><div class="mo-h"><div><span class="eyebrow">${MONTHS[m]}</span><h2>Seu mês com o ALL TORAL</h2></div>${lk("mes-em-numeros", "Seu mês em números", "mo-stk")}</div>
     <div class="mo-g"><div class="ms ms-p"><b>${list.length}</b><span>${list.length === 1 ? "publicado" : "publicados"}</span></div><div class="ms ms-y"><b>${reels}</b><span>Reels</span></div>${third}</div></section>`;
 }
 
