@@ -740,3 +740,10 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
   .ctop>.month{padding:12px 16px 14px 18px}
   .ctop>.month .mo-stk{width:84px}
 }
+
+/* página do cliente: o topo inteiro na cor da marca dele (o painel do estúdio continua rosa) */
+.bar.bar-client{background:var(--brand);color:var(--brand-ink)}
+.bar.bar-client .bar-t small,.bar.bar-client .bar-t b,.bar.bar-client .bar-t b em{color:var(--brand-ink)}
+.bar.bar-client .bar-t small{opacity:.8}
+.chero.chero-client{border-bottom:0}
+.bar.bar-client .bell-n{border-color:var(--brand)}
