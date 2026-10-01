@@ -474,17 +474,24 @@ async function savePlan(visible) {
 /* ---------- painel: precisa da sua atenção ---------- */
 function adminAlerts(list) {
   const cards = [];
+  const card = (c, k, cls, eyebrow, title, text, stk, alt, t) => cards.push({ t, k, html: `<div class="al ${cls}"><button class="al-main" data-act="al-go" data-id="${c.id}" data-k="${esc(k)}"><span class="al-t"><span class="eyebrow">${eyebrow}</span><b>${title}</b><small>${text}</small></span>${lk(stk, alt, "al-stk")}</button><button class="al-x" data-act="al-dismiss" data-k="${esc(k)}" aria-label="Já vi, tirar este aviso" title="Já vi">✕</button></div>` });
   list.forEach(c => {
     const a = c.alerts || {};
-    (a.due || []).forEach(d => cards.push({ t: Date.parse(d.deadline), html: `<button class="al al-due" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${Date.parse(d.deadline) < Date.now() ? "Venceu " : "Vence "}${esc(fmtDeadline(d.deadline))}</span><b>Planejamento de ${esc(firstName(c))}</b><small>${d.open} de ${d.total} ${d.total === 1 ? "ideia" : "ideias"} sem resposta</small></span>${lk("prazo-estourando", "Prazo estourando", "al-stk")}</button>` }));
-    if (a.reply) { const r = a.reply; const what = r.kind === "comment" ? "comentou" : r.status === "alteracao" ? "pediu ajuste" : r.status === "reprovado" ? "pediu para repensar" : "respondeu"; cards.push({ t: Date.parse(r.at), html: `<button class="al" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${esc(fmtStamp(r.at))}</span><b>${esc(firstName(c))} ${what}</b><small>${r.note ? "“" + esc(r.note.slice(0, 70)) + "” · " : ""}${esc(r.title || "")}</small></span>${lk("cliente-respondeu", "Cliente respondeu", "al-stk")}</button>` }); }
-    (a.posted || []).forEach(p => cards.push({ t: Date.parse(p.at), html: `<button class="al" data-act="go" data-id="${c.id}"><span class="al-t"><span class="eyebrow">${esc(fmtStamp(p.at))}</span><b>Post de ${esc(c.name)}</b><small>${esc(p.title)} foi ao ar</small></span>${lk("postado", "Postado", "al-stk")}</button>` }));
+    (a.due || []).forEach(d => card(c, d.key, "al-due", `${Date.parse(d.deadline) < Date.now() ? "Venceu " : "Vence "}${esc(fmtDeadline(d.deadline))}`, `Planejamento de ${esc(firstName(c))}`, `${d.open} de ${d.total} ${d.total === 1 ? "ideia" : "ideias"} sem resposta`, "prazo-estourando", "Prazo estourando", Date.parse(d.deadline) + 1e13));
+    if (a.reply) { const r = a.reply; const what = r.kind === "comment" ? "comentou" : r.status === "alteracao" ? "pediu ajuste" : r.status === "reprovado" ? "pediu para repensar" : "respondeu"; card(c, r.key, "", esc(fmtStamp(r.at)), `${esc(firstName(c))} ${what}`, `${r.note ? "“" + esc(r.note.slice(0, 70)) + "” · " : ""}${esc(r.title || "")}`, "cliente-respondeu", "Cliente respondeu", Date.parse(r.at)); }
+    (a.posted || []).forEach(p => card(c, p.key, "", esc(fmtStamp(p.at)), `Post de ${esc(c.name)}`, `${esc(p.title)} foi ao ar`, "postado", "Postado", Date.parse(p.at)));
   });
   if (!cards.length) return "";
   cards.sort((x, y) => (y.t || 0) - (x.t || 0));
-  const due = cards.filter(x => x.html.includes("al-due")); const rest = cards.filter(x => !x.html.includes("al-due"));
-  const show = [...due, ...rest].slice(0, 6);
-  return `<section class="alerts"><div class="section-h"><h2>Precisa da sua <em>atenção</em></h2><span class="eyebrow">${cards.length} ${cards.length === 1 ? "aviso" : "avisos"}</span></div><div class="al-grid">${show.map(x => x.html).join("")}</div></section>`;
+  const show = cards.slice(0, 6);
+  return `<section class="alerts"><div class="section-h"><h2>Precisa da sua <em>atenção</em></h2><div class="actions"><span class="eyebrow">${cards.length} ${cards.length === 1 ? "aviso" : "avisos"}</span><button class="link" data-act="al-clear" data-k="${esc(cards.map(x => x.k).join("|"))}">Limpar todos</button></div></div><div class="al-grid">${show.map(x => x.html).join("")}</div></section>`;
+}
+async function dismissAlerts(keys) {
+  keys = keys.filter(Boolean); if (!keys.length) return;
+  S.clientList = (S.clientList || []).map(c => { const a = c.alerts; if (!a) return c;
+    return { ...c, alerts: { ...a, reply: a.reply && keys.includes(a.reply.key) ? null : a.reply, due: (a.due || []).filter(d => !keys.includes(d.key)), posted: (a.posted || []).filter(p => !keys.includes(p.key)) } }; });
+  if (S.mode === "admin" && !S.clientId) render();
+  try { await api("/api/admin/dismiss", { method: "POST", body: { keys } }); } catch (e) { toast(e.message); }
 }
 function cardWaiting(c) {
   const k = c.counts || {}; const pend = (k.pendente || 0) + (k.ajustado || 0) + (k.ideias || 0);
@@ -512,6 +519,9 @@ function planClick(a, b) {
     case "ask-cancel": e.ask = null; renderSheet(); break;
     case "ask-send": { const note = ($("#idea-note")?.value || "").trim(); const full = [(e.chips || []).length ? "Ajustar: " + e.chips.join(", ") : "", note].filter(Boolean).join(" · "); if (e.ask === "alteracao" && !full) { e.err = "Conte o que você quer ajustar."; renderSheet(); break; } decideIdea(e.ask, full); break; }
     case "notifs": S.open = null; S.editor = { kind: "notifs", sheetCls: "sheet-c" }; renderSheet(); break;
+    case "al-go": dismissAlerts([b.dataset.k]); navigate("/admin/" + b.dataset.id); break;
+    case "al-dismiss": dismissAlerts([b.dataset.k]); toast("Aviso removido"); break;
+    case "al-clear": dismissAlerts((b.dataset.k || "").split("|")); toast("Avisos limpos"); break;
     case "nf-open": { const id = b.dataset.id; closeSheet(); openPost(id); break; }
     case "goto-new": closeSheet(); setTimeout(() => document.getElementById("artes-novas")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); break;
     /* estúdio */

@@ -241,16 +241,21 @@ async function touchVisit(db, client) {
 }
 
 /* avisos do painel: cliente respondeu, prazo estourando, postado e cliente sumido */
-function alertsFor(client, posts, plans) {
+function alertsFor(client, posts, plans, seen = {}) {
   const t = Date.now(); const day = 24 * 60 * 60 * 1000;
   const replies = [];
   posts.forEach((p) => (p.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: p.title, where: "post", id: p.id }); }));
   plans.forEach((pl) => (pl.ideas || []).forEach((i) => (i.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at && (h.note || h.status !== "aprovado")) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: i.title, where: "plan", id: pl.id }); })));
   replies.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  const reply = replies.find((r) => t - Date.parse(r.at) < 3 * day && (r.note || ["alteracao", "reprovado"].includes(r.status))) || null;
+  const key = (k) => `${client.id}:${k}`;
+  /* "já vi" numa resposta do cliente vale para ela e para as anteriores */
+  const seenReply = seen[key("r")] || "";
+  replies.forEach((r) => { r.key = key(`r@${r.at}`); });
+  const reply = replies.find((r) => r.at > seenReply && t - Date.parse(r.at) < 3 * day && (r.note || ["alteracao", "reprovado"].includes(r.status))) || null;
   const due = plans.filter((pl) => pl.visible !== false && pl.deadline && openIdeas(pl) > 0 && Date.parse(pl.deadline) - t < day)
-    .map((pl) => ({ id: pl.id, deadline: pl.deadline, open: openIdeas(pl), total: (pl.ideas || []).length, start: pl.start, end: pl.end, period: pl.period }));
-  const posted = posts.filter((p) => p.published?.at && t - Date.parse(p.published.at) < day).map((p) => ({ id: p.id, title: p.title, at: p.published.at }));
+    .map((pl) => ({ id: pl.id, deadline: pl.deadline, open: openIdeas(pl), total: (pl.ideas || []).length, start: pl.start, end: pl.end, period: pl.period, key: key(`d:${pl.id}:${pl.deadline}:${openIdeas(pl)}`) }))
+    .filter((d) => !seen[d.key]);
+  const posted = posts.filter((p) => p.published?.at && t - Date.parse(p.published.at) < day).map((p) => ({ id: p.id, title: p.title, at: p.published.at, key: key(`p:${p.id}:${p.published.at}`) })).filter((p) => !seen[p.key]);
   return { reply, due, posted, lastVisit: client.visits?.last || null };
 }
 
@@ -524,7 +529,24 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
         return json({ subject: "" });
       }
 
+      /* avisos do painel já vistos: somem até acontecer algo novo */
+      if (a === "dismiss" && method === "POST") {
+        const body = await readBody(req);
+        const keys = (Array.isArray(body.keys) ? body.keys : []).filter((k) => typeof k === "string" && k.length < 300).slice(0, 100);
+        const seen = (await db.get("cfg/dismissed", { type: "json" })) || {};
+        const t = Date.now();
+        Object.keys(seen).forEach((k) => { if (!k.endsWith(":r") && t - Date.parse(seen[k]) > 40 * 24 * 60 * 60 * 1000) delete seen[k]; });
+        keys.forEach((k) => {
+          const m = /^([a-z0-9]+):r@(.+)$/.exec(k);
+          if (m) { const rk = `${m[1]}:r`; if (!seen[rk] || seen[rk] < m[2]) seen[rk] = m[2]; }
+          else seen[k] = now();
+        });
+        await db.setJSON("cfg/dismissed", seen);
+        return json({ ok: true });
+      }
+
       if (a === "clients" && !b && method === "GET") {
+        const seen = (await db.get("cfg/dismissed", { type: "json" })) || {};
         const clients = await listJSON(db, "clients/");
         const withCounts = await Promise.all(
           clients.map(async (cl) => {
@@ -535,7 +557,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const reqs = (await listJSON(db, `requests/${cl.id}/`)).filter((r) => r.status === "novo").length;
             const plans = (await listJSON(db, `plans/${cl.id}/`)).filter((p) => p.visible !== false);
             const planOpen = plans.reduce((t, p) => t + openIdeas(p), 0);
-            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs, ideias: planOpen }, alerts: alertsFor(cl, all, plans) };
+            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs, ideias: planOpen }, alerts: alertsFor(cl, all, plans, seen) };
           })
         );
         return json({ clients: withCounts.sort((x, y) => x.name.localeCompare(y.name)) });
