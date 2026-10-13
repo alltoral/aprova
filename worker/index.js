@@ -201,7 +201,7 @@ function cleanShape(s) {
 const openNotes = (p) => (p.notes || []).filter((n) => !n.resolved).length;
 
 /* ---------- guia visual: cores, fontes, logos e regras para o cliente aprovar ---------- */
-const GUIDE_SECTIONS = ["geral", "logo", "cores", "fontes", "elementos", "voz", "regras"];
+const GUIDE_SECTIONS = ["geral", "resumo", "logo", "cores", "fontes", "elementos", "social", "voz", "regras"];
 function cleanGuide(body, prev, clientId) {
   const colors = (Array.isArray(body.colors) ? body.colors : []).slice(0, 24).map((c) => ({
     name: str(c?.name, 60).trim(), hex: /^#[0-9a-f]{6}$/i.test(c?.hex || "") ? c.hex.toLowerCase() : "#000000", role: str(c?.role, 160).trim(),
@@ -219,6 +219,10 @@ function cleanGuide(body, prev, clientId) {
     colors,
     fonts,
     elements: imgs(body.elements, 24),
+    summary: imgs(body.summary ? [body.summary] : [], 1)[0] || null,
+    bio: str(body.bio, 500),
+    templates: imgs(body.templates, 12),
+    profiles: imgs(body.profiles, 4),
     voice: str(body.voice, 3000),
     dos: str(body.dos, 3000),
     donts: str(body.donts, 3000),
@@ -815,7 +819,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           if (!d && method === "PUT") {
             const body = await readBody(req);
             const guide = cleanGuide(body, prev, b);
-            if (!guide.colors.length && !guide.fonts.length && !guide.logos.length) return fail("Coloque pelo menos uma cor, uma fonte ou um logo no guia");
+            if (!guide.colors.length && !guide.fonts.length && !guide.logos.length && !guide.summary) return fail("Coloque pelo menos uma cor, uma fonte, um logo ou a imagem do guia");
             if (body.newVersion && prev) {
               const was = prev.review?.status;
               const to = was === "alteracao" || was === "reprovado" ? "ajustado" : "pendente";
