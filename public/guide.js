@@ -48,6 +48,8 @@ function guideForm() {
   return `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="gh" style="max-width:860px">
   <div class="panel-h"><div class="t"><span class="eyebrow">${esc(S.client?.name || "Cliente")}</span><h2 id="gh">${S.guide ? "Editar guia visual" : "Novo guia visual"}</h2></div><button class="x" data-act="close" aria-label="Fechar">✕</button></div>
   <div class="form g-form">
+    <label class="g-auto ${e.reading ? "busy" : ""}" for="g-up-auto"><span class="g-auto-ic" aria-hidden="true">${e.reading ? "…" : "✦"}</span><span><b>${e.reading ? esc(e.reading) : "Preencher com a imagem do guia"}</b><small>Envie a prancha do guia visual pronta. O Aprova lê as cores, fontes, elementos e regras e preenche tudo aqui embaixo. Depois é só conferir.</small></span></label>
+    <input class="sr" id="g-up-auto" type="file" accept="image/png,image/jpeg,image/webp" data-g-auto ${e.reading || e.uploading ? "disabled" : ""}>
     <div class="fgrid">
       <label class="field full"><span>Nome do guia</span><input type="text" data-g="title" value="${esc(d.title)}" placeholder="Guia visual"></label>
       <label class="field full"><span>Conceito da marca (abre o guia)</span><textarea rows="3" data-g="intro" placeholder="Ex.: Uma marca acolhedora e direta, com cores quentes e tipografia firme.">${esc(d.intro)}</textarea></label>
@@ -97,6 +99,94 @@ async function uploadGuide(k, files) {
     if (S.editor === e) renderSheet();
   }
   if (S.editor === e) { e.uploading = false; e.progress = 0; renderSheet(); }
+}
+
+/* ---------- preencher o guia a partir de uma imagem ----------
+   1) PNG com os dados embutidos (chunk iTXt/tEXt "aprova-guide"): leitura exata, inclusive recortes de logo e elementos.
+   2) Qualquer outra imagem: a IA lê cores, fontes e regras; as cores também saem da própria imagem. */
+async function pngGuideMeta(file) {
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    if (buf[0] !== 0x89 || buf[1] !== 0x50) return null;
+    const dv = new DataView(buf.buffer); let p = 8;
+    while (p + 8 < buf.length) {
+      const len = dv.getUint32(p), type = String.fromCharCode(...buf.slice(p + 4, p + 8)), data = buf.subarray(p + 8, p + 8 + len);
+      if (type === "tEXt" || type === "iTXt") {
+        const z = data.indexOf(0); const kw = new TextDecoder("latin1").decode(data.subarray(0, z));
+        if (kw === "aprova-guide") {
+          let rest = data.subarray(z + 1), dec = new TextDecoder("latin1");
+          if (type === "iTXt") { if (rest[0] !== 0) return null; rest = rest.subarray(2); const l = rest.indexOf(0); rest = rest.subarray(l + 1); const t = rest.indexOf(0); rest = rest.subarray(t + 1); dec = new TextDecoder("utf-8"); }
+          return JSON.parse(dec.decode(rest));
+        }
+      }
+      if (type === "IEND") break;
+      p += 12 + len;
+    }
+  } catch (x) { /* sem dados embutidos */ }
+  return null;
+}
+function imagePalette(cv) {
+  const { width: w, height: h } = cv; const px = cv.getContext("2d").getImageData(0, 0, w, h).data; const count = new Map();
+  for (let i = 0; i < px.length; i += 4) { if (px[i + 3] < 200) continue; const k = (px[i] >> 4) << 8 | (px[i + 1] >> 4) << 4 | (px[i + 2] >> 4); count.set(k, (count.get(k) || 0) + 1); }
+  const hex = k => "#" + [k >> 8, (k >> 4) & 15, k & 15].map(v => (v * 16 + 8).toString(16).padStart(2, "0")).join("");
+  const out = [];
+  [...count.entries()].sort((a, b) => b[1] - a[1]).forEach(([k, n]) => {
+    if (out.length >= 6 || n < (w * h) / 400) return;
+    const c = [k >> 8, (k >> 4) & 15, k & 15];
+    if (out.some(o => Math.hypot(o.c[0] - c[0], o.c[1] - c[1], o.c[2] - c[2]) < 3)) return;
+    out.push({ c, hex: hex(k) });
+  });
+  const sat = ([r, g, b]) => (Math.max(r, g, b) - Math.min(r, g, b)) / 15;
+  return out.sort((a, b) => (sat(b.c) > .25) - (sat(a.c) > .25)).map((o, i) => ({ name: i ? "" : "Principal", hex: o.hex, role: "" }));
+}
+async function cropUpload(bmp, box, label) {
+  const [x, y, w, h] = (box || []).map(Number);
+  if (![x, y, w, h].every(Number.isFinite) || w < 8 || h < 8) return null;
+  const cv = document.createElement("canvas"); cv.width = Math.round(w); cv.height = Math.round(h);
+  cv.getContext("2d").drawImage(bmp, x, y, w, h, 0, 0, cv.width, cv.height);
+  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+  if (!blob) return null;
+  const r = await uploadOne(new File([blob], (label || "recorte") + ".png", { type: "image/png" }), null);
+  return { id: r.id, type: r.type };
+}
+async function readGuideImage(file) {
+  const e = S.editor; if (!e || e.kind !== "guide") return;
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { e.err = "Envie a imagem do guia em PNG, JPG ou WEBP."; renderSheet(); return; }
+  const step = t => { if (S.editor === e) { e.reading = t; renderSheet(); } };
+  e.err = ""; step("Lendo a imagem…");
+  try {
+    const bmp = await createImageBitmap(file);
+    let meta = file.type === "image/png" ? await pngGuideMeta(file) : null; const exact = !!meta;
+    if (!meta) {
+      const sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+      const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      const small = document.createElement("canvas"); small.width = 160; small.height = Math.max(1, Math.round(160 * cv.height / cv.width)); small.getContext("2d").drawImage(cv, 0, 0, small.width, small.height);
+      const palette = imagePalette(small);
+      step("A IA está lendo cores, fontes e regras…");
+      let image = cv.toDataURL("image/jpeg", .85); if (image.length > 2900000) image = cv.toDataURL("image/jpeg", .6);
+      const r = await api("/api/admin/guide-read", { method: "POST", body: { image } }).catch(() => ({ guide: null }));
+      meta = r.guide || {};
+      if (!(meta.colors || []).length) meta.colors = palette;
+    }
+    const d = e.data; const lines = v => Array.isArray(v) ? v.join("\n") : String(v || "");
+    ["title", "intro", "voice"].forEach(k => { if (meta[k]) d[k] = String(meta[k]); });
+    ["dos", "donts"].forEach(k => { const t = lines(meta[k]).trim(); if (t) d[k] = t; });
+    const colors = (meta.colors || []).filter(c => /^#[0-9a-f]{6}$/i.test(c?.hex || "")).map(c => ({ name: String(c.name || ""), hex: c.hex.toLowerCase(), role: String(c.role || "") }));
+    if (colors.length) d.colors = colors.slice(0, 24);
+    const fonts = (meta.fonts || []).filter(f => f?.name).map(f => ({ name: String(f.name), role: String(f.role || ""), weights: String(f.weights || ""), sample: String(f.sample || "") }));
+    if (fonts.length) { d.fonts = fonts.slice(0, 8); loadFonts(d.fonts); }
+    step("Guardando a imagem no guia…");
+    const names = (meta.elements || []).map(x => typeof x === "string" ? x : "").filter(Boolean);
+    const board = await uploadOne(file, null);
+    d.elements = [{ id: board.id, type: board.type, label: ("Guia completo" + (names.length ? " · " + names.join(", ") : "")).slice(0, 80), bg: "light" }, ...(d.elements || [])].slice(0, 24);
+    if (exact) {
+      for (const l of (meta.logos || []).slice(0, 12 - (d.logos || []).length)) { const m = await cropUpload(bmp, l.box, l.label).catch(() => null); if (m) d.logos = [...(d.logos || []), { ...m, label: String(l.label || "").slice(0, 80), bg: ["light", "dark", "brand"].includes(l.bg) ? l.bg : "light" }]; }
+      for (const el of (meta.elements || []).filter(x => x && typeof x === "object").slice(0, 23)) { const m = await cropUpload(bmp, el.box, el.label).catch(() => null); if (m) d.elements = [...d.elements, { ...m, label: String(el.label || "").slice(0, 80), bg: "light" }].slice(0, 24); }
+    }
+    if (S.editor === e) { e.reading = ""; renderSheet(); }
+    toast(exact ? "Guia preenchido com os dados da imagem" : colors.length || fonts.length ? "Guia preenchido pela imagem. Confira antes de enviar" : "Não deu para ler tudo. A imagem foi guardada, complete o que faltar");
+  } catch (x) { if (S.editor === e) { e.reading = ""; e.err = x.message || "Não deu para ler a imagem"; renderSheet(); } }
 }
 
 /* ---------- guia aberto (cliente aprova; estúdio confere) ---------- */
@@ -192,6 +282,7 @@ document.addEventListener("input", ev => {
 document.addEventListener("change", ev => {
   const t = ev.target, e = S.editor; if (e?.kind !== "guide") return;
   if (t.matches("[data-g-upload]") && t.files.length) { const f = [...t.files]; t.value = ""; uploadGuide(t.dataset.gUpload, f); }
+  if (t.matches("[data-g-auto]") && t.files.length) { const f = t.files[0]; t.value = ""; readGuideImage(f); }
   if (t.dataset.gf && t.dataset.gf.endsWith(".name")) { loadFonts(e.data.fonts); renderSheet(); }
   if (t.dataset.gl && t.dataset.gl.endsWith(".bg")) renderSheet();
 });

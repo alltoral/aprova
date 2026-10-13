@@ -675,6 +675,50 @@ ${text}
         return json({ ideas: null });
       }
 
+      /* lê a imagem do guia visual (prancha da marca) e devolve cores, fontes e regras */
+      if (a === "guide-read" && method === "POST") {
+        if (!env.AI) return json({ guide: null });
+        const body = await readBody(req);
+        const img = typeof body.image === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(body.image) && body.image.length < 3000000 ? body.image : "";
+        if (!img) return fail("Envie uma imagem PNG, JPG ou WEBP");
+        const ask = `Esta imagem é o guia visual (manual de marca) de uma empresa. Leia tudo o que está escrito e o que aparece nela e responda SOMENTE com um objeto JSON válido, sem comentários, em português do Brasil:
+{ "title": "nome da marca", "intro": "conceito da marca em 1 a 3 frases, se estiver escrito", "colors": [ { "name": "nome da cor", "hex": "#rrggbb", "role": "onde usar" } ], "fonts": [ { "name": "nome exato da fonte", "role": "Títulos, Textos, Destaques...", "weights": "400, 700", "sample": "frase de exemplo mostrada" } ], "elements": ["elementos gráficos que aparecem: padrões, ícones, formas, fotos"], "voice": "tom de voz, se houver", "dos": ["regras do que pode"], "donts": ["regras do que não pode"] }
+Use os códigos HEX escritos na imagem quando houver. Se não houver, estime pela cor que aparece. Não invente fontes nem regras que não aparecem; omita o que não existir.`;
+        const pick = (raw) => {
+          const t = typeof raw === "object" && raw ? JSON.stringify(raw) : String(raw || "");
+          const m = t.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try { return JSON.parse(m[0]); } catch { return null; }
+        };
+        const list = (v) => (Array.isArray(v) ? v : typeof v === "string" ? v.split("\n") : []).map((x) => str(String(x || ""), 300).replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+        const models = ["@cf/meta/llama-4-scout-17b-16e-instruct", "@cf/mistralai/mistral-small-3.1-24b-instruct"];
+        for (const model of models) {
+          try {
+            const r = await env.AI.run(model, { messages: [{ role: "user", content: [{ type: "text", text: ask }, { type: "image_url", image_url: { url: img } }] }], max_tokens: 2000 });
+            const o = pick(r?.response ?? r?.result?.response ?? r);
+            if (!o) continue;
+            const guide = {
+              title: str(String(o.title || ""), 120).trim(),
+              intro: str(String(o.intro || ""), 3000).trim(),
+              colors: (Array.isArray(o.colors) ? o.colors : []).slice(0, 24).map((c) => {
+                let hex = String(c?.hex || "").trim().toLowerCase();
+                if (/^#?[0-9a-f]{3}$/.test(hex)) hex = "#" + hex.replace("#", "").split("").map((x) => x + x).join("");
+                if (/^[0-9a-f]{6}$/.test(hex)) hex = "#" + hex;
+                return /^#[0-9a-f]{6}$/.test(hex) ? { name: str(String(c?.name || ""), 60).trim(), hex, role: str(String(c?.role || ""), 160).trim() } : null;
+              }).filter(Boolean),
+              fonts: (Array.isArray(o.fonts) ? o.fonts : []).slice(0, 8).map((f) => ({ name: str(String(f?.name || ""), 80).trim(), role: str(String(f?.role || ""), 80).trim(), weights: str(String(f?.weights || ""), 80).trim(), sample: str(String(f?.sample || ""), 200).trim() })).filter((f) => f.name),
+              elements: list(o.elements).slice(0, 12),
+              voice: str(String(o.voice || ""), 3000).trim(),
+              dos: list(o.dos).slice(0, 20).join("\n"),
+              donts: list(o.donts).slice(0, 20).join("\n"),
+            };
+            if (!guide.colors.length && !guide.fonts.length && !guide.title) continue;
+            return json({ guide });
+          } catch (err) { /* tenta o próximo modelo */ }
+        }
+        return json({ guide: null });
+      }
+
       /* sugestão de assunto para o título: lê a arte (miniatura) e a legenda com a IA do Cloudflare */
       if (a === "title" && method === "POST") {
         if (!env.AI) return json({ subject: "" });

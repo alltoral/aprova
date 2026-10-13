@@ -164,7 +164,7 @@ function dviewSheet(sh) {
     if (fr) { fr.addEventListener("load", () => { e.loaded = true; try { fr.contentWindow.postMessage({ aprova: "ping" }, "*"); } catch (x) {} dvHint(); }); e.loaded = false; setTimeout(dvHint, 6000); }
     const img = sh.querySelector("#dv-shot-img"); if (img) img.addEventListener("load", () => dvMarks());
   }
-  dvLayout(); dvHeader(); dvSide(); dvMarks(); dvToolbar();
+  dvHeader(); dvLayout(); dvSide(); dvMarks(); dvToolbar();
 }
 function dvSkeleton(p) {
   const e = S.editor; const shots = shotsFor(p, e.device);
