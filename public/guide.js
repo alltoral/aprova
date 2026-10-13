@@ -58,7 +58,7 @@ function guideForm() {
       <label class="field full"><span>Nome do guia</span><input type="text" data-g="title" value="${esc(d.title)}" placeholder="Guia visual"></label>
       <label class="field full"><span>Conceito da marca (abre o guia)</span><textarea rows="3" data-g="intro" placeholder="Ex.: Uma marca acolhedora e direta, com cores quentes e tipografia firme.">${esc(d.intro)}</textarea></label>
     </div>
-    <h3 class="g-h">Resumo do guia</h3><p class="hint">A prancha com tudo em uma imagem. Abre o guia para o cliente ver o todo.</p>
+    <h3 class="g-h">Resumo do guia</h3><p class="hint">A prancha com tudo em uma imagem. Fica na capa do guia, ao lado do logo, e abre grande quando o cliente toca.</p>
     <div class="g-imgs g-sum">${d.summary ? imgList("summary", "", 0, d.summary) : up("summary", "+ Enviar a imagem do resumo", true)}</div>
     <h3 class="g-h">Logo</h3><p class="hint">Versão principal primeiro. Envie também as versões para fundo escuro e na cor da marca, se tiver. Logo em baixa qualidade? Use Vetorizar.</p>
     <div class="g-imgs">${(d.logos || []).map((m, i) => imgList("logos", "Nome da versão", i, m)).join("")}${up("logos", "+ Enviar logo")}</div>
@@ -69,8 +69,6 @@ function guideForm() {
     <div class="g-fonts">${(d.fonts || []).map((f, i) => `<div class="g-font"><button class="g-x" data-act="g-rm" data-k="fonts" data-i="${i}" aria-label="Remover fonte ${i + 1}">✕</button><div class="g-font-f"><input type="text" data-gf="${i}.name" value="${esc(f.name)}" placeholder="Nome da fonte" aria-label="Fonte ${i + 1}"><input type="text" data-gf="${i}.role" value="${esc(f.role)}" placeholder="Uso (Títulos, Textos…)" aria-label="Uso da fonte ${i + 1}"><input type="text" data-gf="${i}.weights" value="${esc(f.weights)}" placeholder="Pesos (400, 700)" aria-label="Pesos da fonte ${i + 1}"><input type="text" data-gf="${i}.sample" value="${esc(f.sample)}" placeholder="Frase de exemplo" aria-label="Frase de exemplo ${i + 1}" class="wide"></div>
       ${f.name ? `<div class="g-font-prev" style="${fontCss(f)}">${esc(f.sample || f.name)}</div>` : ""}</div>`).join("")}
       <button class="btn sm" data-act="g-add" data-k="fonts">+ Fonte</button></div>
-    <h3 class="g-h">Elementos e aplicações</h3><p class="hint">Padrões, ícones, fotos de referência ou a marca aplicada (post, cartão, fachada).</p>
-    <div class="g-imgs">${(d.elements || []).map((m, i) => imgList("elements", "Nome do elemento", i, m)).join("")}${up("elements", "+ Enviar imagens")}</div>
     <h3 class="g-h">Rede social</h3><p class="hint">Mostra para o cliente como o perfil vai ficar. A foto do perfil usa o logo e o @ do cadastro do cliente.</p>
     <label class="field full"><span>Bio do perfil</span><textarea rows="3" data-g="bio" placeholder="Ex.: Pilates para todas as idades ✦ Agende sua aula experimental">${esc(d.bio || "")}</textarea></label>
     <p class="hint" style="margin:0"><b>Templates dos posts</b> (aparecem no grid do perfil, na ordem)</p>
@@ -193,7 +191,7 @@ async function readGuideImage(file) {
     d.summary = { id: board.id, type: board.type, label: "", bg: "light" };
     if (exact) {
       for (const l of (meta.logos || []).slice(0, 12 - (d.logos || []).length)) { const m = await cropUpload(bmp, l.box, l.label).catch(() => null); if (m) d.logos = [...(d.logos || []), { ...m, label: "", bg: ["light", "dark", "brand"].includes(l.bg) ? l.bg : "light" }]; }
-      for (const el of (meta.elements || []).filter(x => x && typeof x === "object").slice(0, 23)) { const m = await cropUpload(bmp, el.box, el.label).catch(() => null); if (m) d.elements = [...(d.elements || []), { ...m, label: String(el.label || "").slice(0, 80), bg: "light" }].slice(0, 24); }
+      if (false) for (const el of (meta.elements || []).filter(x => x && typeof x === "object").slice(0, 23)) { const m = await cropUpload(bmp, el.box, el.label).catch(() => null); if (m) d.elements = [...(d.elements || []), { ...m, label: String(el.label || "").slice(0, 80), bg: "light" }].slice(0, 24); }
     }
     if (S.editor === e) { e.reading = ""; renderSheet(); }
     toast(exact ? "Guia preenchido com os dados da imagem" : colors.length || fonts.length ? "Guia preenchido pela imagem. Confira antes de enviar" : "Não deu para ler tudo. A imagem foi guardada, complete o que faltar");
@@ -231,6 +229,32 @@ async function vectorizeLogo(i) {
   e.vec = null; if (S.editor === e) renderSheet();
 }
 
+/* ---------- capa do guia: mesma cor do fundo do logo, para o logo se misturar ---------- */
+const HERO_BG = new Map();
+function heroBg(m, main) {
+  const fall = m.bg === "dark" ? "#141014" : m.bg === "light" ? "#ffffff" : main;
+  if (HERO_BG.has(m.id)) return HERO_BG.get(m.id) || main;
+  HERO_BG.set(m.id, null);
+  const apply = hex => { HERO_BG.set(m.id, hex); document.querySelectorAll(`.gv-cover[data-hero="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.style.color = swatchInk(hex); el.querySelector(".gv-hero")?.setAttribute("data-bg", hex); }); if (hex !== fall) document.querySelectorAll(`.gv-lg[data-bgof="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.querySelector("img").style.background = hex; el.dataset.bg = hex; }); };
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const n = 48, cv = document.createElement("canvas"); cv.width = n; cv.height = n;
+      const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0, n, n); const px = ctx.getImageData(0, 0, n, n).data;
+      let r = 0, g = 0, b = 0, a = 0, k = 0; const pts = [];
+      for (let i = 0; i < n; i++) [[i, 0], [i, n - 1], [0, i], [n - 1, i]].forEach(([x, y]) => { const o = (y * n + x) * 4; pts.push([px[o], px[o + 1], px[o + 2], px[o + 3]]); });
+      pts.forEach(p => { r += p[0]; g += p[1]; b += p[2]; a += p[3]; k++; });
+      if (a / k < 200) return apply(fall); /* fundo transparente: fica a cor da versão escolhida */
+      r /= k; g /= k; b /= k;
+      const spread = pts.reduce((t, p) => t + Math.hypot(p[0] - r, p[1] - g, p[2] - b), 0) / k;
+      if (spread > 28) return apply(fall); /* foto ou fundo com desenho: não dá para misturar */
+      apply("#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join(""));
+    } catch (x) { /* sem leitura de pixels */ }
+  };
+  img.src = blob(m.id);
+  return main;
+}
+
 /* ---------- zoom: imagem grande por cima de tudo ---------- */
 function zoomImage(src, bg) {
   if (!src) return; document.querySelector(".gz")?.remove();
@@ -255,7 +279,9 @@ function guideView() {
     ${e.ask === k ? `<div class="gv-ask"><textarea id="g-note" rows="3" placeholder="O que você quer mudar em ${esc(title.toLowerCase())}?">${esc(e.note || "")}</textarea>${S.who || S.isOwner ? "" : `<input type="text" id="who" placeholder="Seu nome" autocomplete="name">`}<div class="actions"><button class="btn sm brand" data-act="g-send" data-k="${k}">Enviar</button><button class="btn sm ghost" data-act="g-ask" data-k="">Cancelar</button></div></div>` : ""}</section>` : "";
   const lines = t => String(t || "").split("\n").map(x => x.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
   const logos = g.logos || [];
-  const hero = logos.find(m => m.bg === "brand") || logos[0];
+  const hero = logos[0];
+  const summary = g.summary || (g.elements || [])[0];
+  const hb = hero ? heroBg(hero, main) : main;
   const zoom = (m, bg, cls, inner) => `<button class="gv-z ${cls || ""}" data-act="g-zoom" data-src="${blob(m.id)}" data-bg="${esc(bg || "")}" aria-label="Ampliar">${inner || `<img src="${blob(m.id)}" alt="" loading="lazy">`}</button>`;
   const handle = c.handle || "@" + String(c.name || "marca").toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "");
   const avatar = hero ? `<span class="ig-av" style="background:${hero.bg === "dark" ? "#141014" : hero.bg === "brand" ? esc(main) : "#fff"}"><img src="${blob(hero.id)}" alt=""></span>` : `<span class="ig-av" style="background:${esc(main)};color:${swatchInk(main)}">${esc(initials(c.name || "M"))}</span>`;
@@ -268,17 +294,16 @@ function guideView() {
         <div class="ig-grid">${(g.templates || []).map(m => zoom(m, "", "ig-t")).join("")}</div></div>` : ""}
       ${(g.profiles || []).length ? `<div class="gv-prof">${g.profiles.map(m => zoom(m, "", "gv-pf")).join("")}</div>` : ""}</div>` : "";
   return `<div class="gv" role="dialog" aria-modal="true" aria-labelledby="gvh">
-    <header class="gv-cover" style="background:${esc(main)};color:${swatchInk(main)}"><button class="x" data-act="close" aria-label="Fechar">✕</button>
+    <header class="gv-cover" ${hero ? `data-hero="${esc(hero.id)}"` : ""} style="background:${esc(hb)};color:${swatchInk(hb)}"><button class="x" data-act="close" aria-label="Fechar">✕</button>
       <div class="gv-cover-t"><span class="eyebrow">Guia visual · versão ${g.version || 1}</span>
       <h1 id="gvh" class="display">${esc(c.name || g.title)}</h1>${g.intro ? `<p>${esc(g.intro)}</p>` : ""}
-      <span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span></div>
-      ${hero ? `<button class="gv-hero ${hero.bg}" data-act="g-zoom" data-src="${blob(hero.id)}" data-bg="${hero.bg === "brand" ? esc(main) : hero.bg}" aria-label="Ampliar o logo"><img src="${blob(hero.id)}" alt="Logo ${esc(c.name)}"></button>` : ""}</header>
+      <span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span>
+      ${summary ? `<button class="gv-sumbtn" data-act="g-zoom" data-src="${blob(summary.id)}"><img src="${blob(summary.id)}" alt=""><span><b>Resumo do guia visual</b><small>Toque para ver tudo em uma página</small></span></button>` : ""}</div>
+      ${hero ? `<button class="gv-hero" data-act="g-zoom" data-src="${blob(hero.id)}" data-bg="${esc(hb)}" aria-label="Ampliar o logo"><img src="${blob(hero.id)}" alt="Logo ${esc(c.name)}"></button>` : ""}</header>
     <div class="gv-body">
-      ${sec("resumo", "O guia em uma página", g.summary ? `${zoom(g.summary, "", "gv-sum")}<p class="hint">Toque na imagem para ampliar.</p>` : "")}
-      ${sec("logo", "Logo", logos.length ? `<div class="gv-logos">${logos.map(m => zoom(m, m.bg === "brand" ? main : m.bg, `gv-lg ${m.bg}`, `<img src="${blob(m.id)}" alt="Logo" style="${m.bg === "brand" ? `background:${esc(main)}` : ""}">`)).join("")}</div>` : "")}
+      ${sec("logo", "Logo", logos.length ? `<div class="gv-logos">${logos.map(m => { heroBg(m, main); const k = HERO_BG.get(m.id); const bgc = k && k !== (m.bg === "dark" ? "#141014" : m.bg === "light" ? "#ffffff" : main) ? k : m.bg === "brand" ? main : ""; return zoom(m, bgc || m.bg, `gv-lg ${m.bg}`, `<img src="${blob(m.id)}" alt="Logo" style="${bgc ? `background:${esc(bgc)}` : ""}">`).replace('class="gv-z', `data-bgof="${esc(m.id)}" ${bgc ? `style="background:${esc(bgc)}"` : ""} class="gv-z`); }).join("")}</div>` : "")}
       ${sec("cores", "Cores", (g.colors || []).length ? `<div class="gv-colors">${g.colors.map(x => `<button class="gv-c" data-act="copy-link" data-link="${esc(x.hex)}" data-msg="Cor ${esc(x.hex)} copiada" title="Copiar ${esc(x.hex)}"><span class="gv-c-sw" style="background:${esc(x.hex)};color:${swatchInk(x.hex)}"><b>${esc(x.name || "Cor")}</b></span><span class="gv-c-t"><code>${esc(x.hex.toUpperCase())}</code><small>${esc(x.role || "")}</small></span></button>`).join("")}</div>` : "")}
       ${sec("fontes", "Fontes", (g.fonts || []).length ? `<div class="gv-fonts">${g.fonts.map(f => `<div class="gv-f"><div class="gv-f-h"><b>${esc(f.name)}</b><small>${esc(f.role || "")}${gWeights(f).length ? " · pesos " + gWeights(f).join(", ") : ""}</small></div><p class="gv-f-big" style="${fontCss(f)}">Aa</p><p class="gv-f-s" style="${fontCss(f)}">${esc(f.sample || "Uma marca bem cuidada fala por si.")}</p><p class="gv-f-abc" style="${fontCss(f)}">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789</p>${gWeights(f).length > 1 ? `<div class="gv-f-w">${gWeights(f).map(w => `<span style="${fontCss(f)};font-weight:${w}">${w}</span>`).join("")}</div>` : ""}</div>`).join("")}</div>` : "")}
-      ${sec("elementos", "Elementos e aplicações", (g.elements || []).length ? `<div class="gv-els">${g.elements.map(m => `<figure>${zoom(m)}${m.label ? `<figcaption>${esc(m.label)}</figcaption>` : ""}</figure>`).join("")}</div>` : "")}
       ${sec("social", "Na rede social", social)}
       ${sec("voz", "Tom de voz", g.voice ? `<p class="gv-p">${esc(g.voice)}</p>` : "")}
       ${sec("regras", "Como usar", lines(g.dos).length || lines(g.donts).length ? `<div class="gv-rules">${lines(g.dos).length ? `<div class="gv-do"><h3>Pode</h3><ul>${lines(g.dos).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${lines(g.donts).length ? `<div class="gv-dont"><h3>Não pode</h3><ul>${lines(g.donts).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}</div>` : "")}
@@ -322,7 +347,7 @@ if (typeof PLAN_SHEETS !== "undefined") Object.assign(PLAN_SHEETS, { guide: guid
 function guideClick(a, b) {
   const e = S.editor;
   switch (a) {
-    case "guide-edit": closeSheet(); S.editor = { kind: "guide", data: S.guide ? JSON.parse(JSON.stringify(S.guide)) : newGuide(), err: "" }; if (!S.editor.data.fonts?.length) S.editor.data.fonts = []; renderSheet(); break;
+    case "guide-edit": closeSheet(); S.editor = { kind: "guide", data: S.guide ? JSON.parse(JSON.stringify(S.guide)) : newGuide(), err: "" }; if (!S.editor.data.summary && S.editor.data.elements?.length) { S.editor.data.summary = { ...S.editor.data.elements[0], label: "" }; S.editor.data.elements = S.editor.data.elements.slice(1); } if (!S.editor.data.fonts?.length) S.editor.data.fonts = []; renderSheet(); break;
     case "guide-open": closeSheet(); S.editor = { kind: "guideview", sheetCls: "sheet-gv", ask: null, note: "" }; renderSheet(); break;
     case "g-add": if (b.dataset.k === "colors") e.data.colors.push({ name: "", hex: "#141014", role: "" }); else e.data.fonts.push({ name: "", role: e.data.fonts.length ? "Textos" : "Títulos", weights: "", sample: "" }); renderSheet(); break;
     case "g-rm": if (b.dataset.k === "summary") e.data.summary = null; else e.data[b.dataset.k].splice(Number(b.dataset.i), 1); if (b.dataset.k === "logos") e.vecUndo = null; renderSheet(); break;
