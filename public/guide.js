@@ -1,0 +1,197 @@
+/* Guia visual: cores, fontes, logos e regras que o estúdio monta e o cliente aprova · Aprova All Toral
+   Vale para os dois tipos de cliente (redes sociais e produtos digitais). */
+
+const GSECTIONS = { geral: "Guia todo", logo: "Logo", cores: "Cores", fontes: "Fontes", elementos: "Elementos", voz: "Tom de voz", regras: "Como usar" };
+const BGS = { light: "Fundo claro", dark: "Fundo escuro", brand: "Cor da marca" };
+const guideSt = () => S.guide?.review?.status || "pendente";
+const newGuide = () => ({ title: "Guia visual", intro: "", logos: [], colors: [{ name: "Principal", hex: (S.client?.color || "#e55496").toLowerCase(), role: "Fundos de destaque, botões e títulos" }], fonts: [{ name: "", role: "Títulos", weights: "", sample: "" }], elements: [], voice: "", dos: "", donts: "" });
+
+/* fontes do Google para mostrar o exemplo com a fonte de verdade */
+const loadedFonts = new Set();
+function loadFonts(list) {
+  (list || []).forEach(f => {
+    const name = String(f?.name || "").trim(); if (!name || loadedFonts.has(name) || f.google === false) return;
+    loadedFonts.add(name);
+    const w = [...new Set(String(f.weights || "").match(/\d{3}/g) || [])].filter(x => +x >= 100 && +x <= 900).sort();
+    const base = "https://fonts.googleapis.com/css2?display=swap&family=" + encodeURIComponent(name).replace(/%20/g, "+");
+    const link = document.createElement("link"); link.rel = "stylesheet"; link.href = w.length ? `${base}:wght@${w.join(";")}` : base;
+    link.onerror = () => { if (w.length) { const l2 = document.createElement("link"); l2.rel = "stylesheet"; l2.href = base; document.head.appendChild(l2); } };
+    document.head.appendChild(link);
+  });
+}
+const fontCss = f => `font-family:'${String(f.name || "").replace(/['"<>;]/g, "")}',var(--f-body)`;
+const swatchInk = hex => inkFor(/^#[0-9a-f]{6}$/i.test(hex || "") ? hex : "#000000");
+const gWeights = f => [...new Set(String(f.weights || "").match(/\d{3}/g) || [])].slice(0, 4);
+
+/* bloco na página do cliente */
+function guideBlock(c) {
+  const g = S.guide;
+  if (S.isOwner && !g) return `<button class="gb-empty" data-act="guide-edit"><span class="gb-plus">+</span><span><b>Guia visual</b><small>Cadastre logo, cores e fontes para ${esc(c.name)} aprovar antes da produção.</small></span></button>`;
+  if (!g || (!S.isOwner && g.visible === false)) return "";
+  loadFonts(g.fonts);
+  const st = guideSt(); const logo = (g.logos || [])[0];
+  return `<section class="gb ${S.isOwner ? "" : "gb-c"}"><button class="gb-main" data-act="guide-open">
+    <div class="gb-cover" style="background:${esc(g.colors?.[0]?.hex || c.color || "#e55496")};color:${swatchInk(g.colors?.[0]?.hex || c.color)}">${logo ? `<img src="${blob(logo.id)}" alt="">` : `<span>${esc(initials(c.name))}</span>`}</div>
+    <div class="gb-t"><span class="eyebrow">${g.visible === false ? "Rascunho · só você vê" : `Guia visual · versão ${g.version || 1}`}</span><b>${S.isOwner ? esc(g.title || "Guia visual") : "Seu <em>guia visual</em>"}</b>
+      <div class="gb-sw">${(g.colors || []).slice(0, 8).map(x => `<i style="background:${esc(x.hex)}" title="${esc(x.name)} ${esc(x.hex)}"></i>`).join("")}</div>
+      <small>${(g.fonts || []).map(f => `<span style="${fontCss(f)}">${esc(f.name)}</span>`).join(" · ") || "Sem fontes"}</small></div>
+    <span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${st === "pendente" && !S.isOwner ? "Aguardando você" : ST[st].label}</span></button>
+    ${S.isOwner ? `<div class="gb-act"><button class="btn sm" data-act="guide-edit">Editar</button><button class="btn sm ghost" data-act="guide-open">Ver como o cliente</button></div>` : ""}</section>`;
+}
+
+/* ---------- editor do guia (estúdio) ---------- */
+function guideForm() {
+  const e = S.editor, d = e.data; loadFonts(d.fonts);
+  const sent = !!S.guide && S.guide.visible !== false;
+  const imgList = (k, label, i, m) => `<div class="g-img ${m.bg}"><img src="${blob(m.id)}" alt=""><input type="text" data-gl="${k}.${i}.label" value="${esc(m.label)}" placeholder="${label}" aria-label="${label} ${i + 1}">${k === "logos" ? `<select data-gl="${k}.${i}.bg" aria-label="Fundo">${Object.entries(BGS).map(([v, l]) => `<option value="${v}" ${m.bg === v ? "selected" : ""}>${l}</option>`).join("")}</select>` : ""}<button class="link danger" data-act="g-rm" data-k="${k}" data-i="${i}">Remover</button></div>`;
+  const up = (k, txt) => `<label class="g-img add" for="g-up-${k}">${e.uploading === k ? `Enviando… ${e.progress || 0}%` : txt}</label><input class="sr" id="g-up-${k}" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple data-g-upload="${k}" ${e.uploading ? "disabled" : ""}>`;
+  return `<div class="panel" role="dialog" aria-modal="true" aria-labelledby="gh" style="max-width:860px">
+  <div class="panel-h"><div class="t"><span class="eyebrow">${esc(S.client?.name || "Cliente")}</span><h2 id="gh">${S.guide ? "Editar guia visual" : "Novo guia visual"}</h2></div><button class="x" data-act="close" aria-label="Fechar">✕</button></div>
+  <div class="form g-form">
+    <div class="fgrid">
+      <label class="field full"><span>Nome do guia</span><input type="text" data-g="title" value="${esc(d.title)}" placeholder="Guia visual"></label>
+      <label class="field full"><span>Conceito da marca (abre o guia)</span><textarea rows="3" data-g="intro" placeholder="Ex.: Uma marca acolhedora e direta, com cores quentes e tipografia firme.">${esc(d.intro)}</textarea></label>
+    </div>
+    <h3 class="g-h">Logo</h3><p class="hint">Versão principal primeiro. Envie também as versões para fundo escuro e na cor da marca, se tiver.</p>
+    <div class="g-imgs">${(d.logos || []).map((m, i) => imgList("logos", "Nome da versão", i, m)).join("")}${up("logos", "+ Enviar logo")}</div>
+    <h3 class="g-h">Cores</h3>
+    <div class="g-colors">${(d.colors || []).map((x, i) => `<div class="g-color"><input type="color" data-gc="${i}.hex" value="${esc(x.hex)}" aria-label="Cor ${i + 1}"><input type="text" data-gc="${i}.hex" class="mono" value="${esc(x.hex)}" aria-label="Código da cor ${i + 1}" maxlength="7"><input type="text" data-gc="${i}.name" value="${esc(x.name)}" placeholder="Nome (ex.: Rosa All)" aria-label="Nome da cor ${i + 1}"><input type="text" data-gc="${i}.role" value="${esc(x.role)}" placeholder="Onde usar (ex.: botões e destaques)" aria-label="Uso da cor ${i + 1}" class="wide"><button class="link danger" data-act="g-rm" data-k="colors" data-i="${i}" aria-label="Remover cor ${i + 1}">✕</button></div>`).join("")}
+      <button class="btn sm" data-act="g-add" data-k="colors">+ Cor</button></div>
+    <h3 class="g-h">Fontes</h3><p class="hint">Escreva o nome igual ao do Google Fonts (ex.: Montserrat, Playfair Display) para o cliente ver o exemplo com a fonte de verdade.</p>
+    <div class="g-fonts">${(d.fonts || []).map((f, i) => `<div class="g-font"><div class="g-font-f"><input type="text" data-gf="${i}.name" value="${esc(f.name)}" placeholder="Nome da fonte" aria-label="Fonte ${i + 1}"><input type="text" data-gf="${i}.role" value="${esc(f.role)}" placeholder="Uso (Títulos, Textos…)" aria-label="Uso da fonte ${i + 1}"><input type="text" data-gf="${i}.weights" value="${esc(f.weights)}" placeholder="Pesos (400, 700)" aria-label="Pesos da fonte ${i + 1}"><input type="text" data-gf="${i}.sample" value="${esc(f.sample)}" placeholder="Frase de exemplo" aria-label="Frase de exemplo ${i + 1}" class="wide"><button class="link danger" data-act="g-rm" data-k="fonts" data-i="${i}" aria-label="Remover fonte ${i + 1}">✕</button></div>
+      ${f.name ? `<div class="g-font-prev" style="${fontCss(f)}">${esc(f.sample || f.name)}</div>` : ""}</div>`).join("")}
+      <button class="btn sm" data-act="g-add" data-k="fonts">+ Fonte</button></div>
+    <h3 class="g-h">Elementos e aplicações</h3><p class="hint">Padrões, ícones, fotos de referência ou a marca aplicada (post, cartão, fachada).</p>
+    <div class="g-imgs">${(d.elements || []).map((m, i) => imgList("elements", "Nome do elemento", i, m)).join("")}${up("elements", "+ Enviar imagens")}</div>
+    <div class="fgrid" style="margin-top:18px">
+      <label class="field full"><span>Tom de voz</span><textarea rows="3" data-g="voice" placeholder="Ex.: Próximo e simples, fala com você, sem gírias.">${esc(d.voice)}</textarea></label>
+      <label class="field"><span>Pode</span><textarea rows="4" data-g="dos" placeholder="Uma regra por linha">${esc(d.dos)}</textarea></label>
+      <label class="field"><span>Não pode</span><textarea rows="4" data-g="donts" placeholder="Uma regra por linha">${esc(d.donts)}</textarea></label>
+    </div>
+    ${e.err ? `<p class="err">${esc(e.err)}</p>` : ""}
+    <div class="form-foot">${S.guide ? `<button class="btn danger ${S.armed === "guide" ? "armed" : ""}" data-act="g-del">${S.armed === "guide" ? "Excluir o guia" : "Excluir"}</button>` : ""}<span class="sp"></span>
+      ${sent ? `<button class="btn" data-act="g-save" data-vis="1" ${S.busy || e.uploading ? "disabled" : ""}>Salvar</button><button class="btn pri" data-act="g-save" data-vis="1" data-nv="1" ${S.busy || e.uploading ? "disabled" : ""}>Enviar nova versão</button>`
+      : `<button class="btn" data-act="g-save" data-vis="0" ${S.busy || e.uploading ? "disabled" : ""}>Salvar rascunho</button><button class="btn pri" data-act="g-save" data-vis="1" ${S.busy || e.uploading ? "disabled" : ""}>Enviar para o cliente</button>`}</div>
+  </div></div>`;
+}
+async function saveGuide(vis, newVersion) {
+  const e = S.editor; const d = { ...e.data, visible: vis, newVersion: !!newVersion };
+  d.colors = (d.colors || []).filter(x => /^#[0-9a-f]{6}$/i.test(x.hex || ""));
+  d.fonts = (d.fonts || []).filter(x => String(x.name || "").trim());
+  if (!d.colors.length && !d.fonts.length && !(d.logos || []).length) { e.err = "Coloque pelo menos uma cor, uma fonte ou um logo."; renderSheet(); return; }
+  S.busy = true; renderSheet();
+  try {
+    const r = await api(`/api/admin/clients/${S.clientId}/guide`, { method: "PUT", body: d });
+    S.guide = r.guide; S.busy = false; closeSheet(); render();
+    toast(!vis ? "Guia salvo como rascunho" : newVersion ? `Versão ${r.guide.version} do guia enviada` : "Guia enviado para o cliente");
+  } catch (x) { S.busy = false; e.err = x.message; renderSheet(); }
+}
+async function uploadGuide(k, files) {
+  const e = S.editor; const max = k === "logos" ? 12 : 24;
+  const list = [...files].filter(f => /^image\//.test(f.type)).slice(0, max - (e.data[k] || []).length);
+  if (!list.length) { e.err = "Envie imagens (PNG, JPG, WEBP ou SVG)."; renderSheet(); return; }
+  e.uploading = k; e.err = ""; renderSheet();
+  for (const f of list) {
+    try { const r = await uploadOne(f, pc => { if (S.editor === e) { e.progress = pc; renderSheet(); } }); e.data[k] = [...(e.data[k] || []), { id: r.id, type: r.type, label: f.name.replace(/\.[^.]+$/, "").slice(0, 60), bg: "light" }]; }
+    catch (x) { e.err = x.message; }
+    if (S.editor === e) renderSheet();
+  }
+  if (S.editor === e) { e.uploading = false; e.progress = 0; renderSheet(); }
+}
+
+/* ---------- guia aberto (cliente aprova; estúdio confere) ---------- */
+function guideView() {
+  const g = S.guide, c = S.client || {}, e = S.editor; if (!g) return "";
+  loadFonts(g.fonts);
+  const st = guideSt(); const r = g.review || {};
+  const main = g.colors?.[0]?.hex || c.color || "#e55496";
+  const hist = (r.history || []).filter(h => h.note).slice().reverse();
+  const bySec = k => hist.filter(h => (h.section || "geral") === k && h.kind === "comment");
+  const sec = (k, title, body) => body ? `<section class="gv-sec" id="gv-${k}"><div class="gv-sec-h"><h2>${title}</h2>${S.isOwner ? "" : `<button class="btn sm ghost" data-act="g-ask" data-k="${k}">Comentar</button>`}</div>${body}
+    ${bySec(k).length ? `<div class="gv-notes">${bySec(k).map(h => `<div class="gv-note ${h.byLabel === "ALL TORAL" ? "studio" : ""}"><b>${esc(nameOf(h))}</b> <small>${esc(fmtStamp(h.at))}${h.v ? ` · v${h.v}` : ""}</small><p>${esc(h.note)}</p></div>`).join("")}</div>` : ""}
+    ${e.ask === k ? `<div class="gv-ask"><textarea id="g-note" rows="3" placeholder="O que você quer mudar em ${esc(title.toLowerCase())}?">${esc(e.note || "")}</textarea>${S.who || S.isOwner ? "" : `<input type="text" id="who" placeholder="Seu nome" autocomplete="name">`}<div class="actions"><button class="btn sm brand" data-act="g-send" data-k="${k}">Enviar</button><button class="btn sm ghost" data-act="g-ask" data-k="">Cancelar</button></div></div>` : ""}</section>` : "";
+  const lines = t => String(t || "").split("\n").map(x => x.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  return `<div class="gv" role="dialog" aria-modal="true" aria-labelledby="gvh">
+    <header class="gv-cover" style="background:${esc(main)};color:${swatchInk(main)}"><button class="x" data-act="close" aria-label="Fechar">✕</button>
+      <span class="eyebrow">Guia visual · versão ${g.version || 1}</span>
+      ${(g.logos || [])[0] ? `<img class="gv-logo" src="${blob(g.logos[0].id)}" alt="Logo ${esc(c.name)}">` : ""}
+      <h1 id="gvh" class="display">${esc(c.name || g.title)}</h1>${g.intro ? `<p>${esc(g.intro)}</p>` : ""}
+      <span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span></header>
+    <div class="gv-body">
+      ${sec("logo", "Logo", (g.logos || []).length ? `<div class="gv-logos">${g.logos.map(m => `<figure class="gv-lg ${m.bg}" style="${m.bg === "brand" ? `background:${esc(main)}` : ""}"><img src="${blob(m.id)}" alt="${esc(m.label || "Logo")}"><figcaption>${esc(m.label || BGS[m.bg])}</figcaption></figure>`).join("")}</div>` : "")}
+      ${sec("cores", "Cores", (g.colors || []).length ? `<div class="gv-colors">${g.colors.map(x => `<button class="gv-c" data-act="copy-link" data-link="${esc(x.hex)}" data-msg="Cor ${esc(x.hex)} copiada" title="Copiar ${esc(x.hex)}"><span class="gv-c-sw" style="background:${esc(x.hex)};color:${swatchInk(x.hex)}"><b>${esc(x.name || "Cor")}</b></span><span class="gv-c-t"><code>${esc(x.hex.toUpperCase())}</code><small>${esc(x.role || "")}</small></span></button>`).join("")}</div>` : "")}
+      ${sec("fontes", "Fontes", (g.fonts || []).length ? `<div class="gv-fonts">${g.fonts.map(f => `<div class="gv-f"><div class="gv-f-h"><b>${esc(f.name)}</b><small>${esc(f.role || "")}${gWeights(f).length ? " · pesos " + gWeights(f).join(", ") : ""}</small></div><p class="gv-f-big" style="${fontCss(f)}">Aa</p><p class="gv-f-s" style="${fontCss(f)}">${esc(f.sample || "Uma marca bem cuidada fala por si.")}</p><p class="gv-f-abc" style="${fontCss(f)}">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789</p>${gWeights(f).length > 1 ? `<div class="gv-f-w">${gWeights(f).map(w => `<span style="${fontCss(f)};font-weight:${w}">${w}</span>`).join("")}</div>` : ""}</div>`).join("")}</div>` : "")}
+      ${sec("elementos", "Elementos e aplicações", (g.elements || []).length ? `<div class="gv-els">${g.elements.map(m => `<figure><img src="${blob(m.id)}" alt="${esc(m.label || "Elemento")}" loading="lazy"><figcaption>${esc(m.label || "")}</figcaption></figure>`).join("")}</div>` : "")}
+      ${sec("voz", "Tom de voz", g.voice ? `<p class="gv-p">${esc(g.voice)}</p>` : "")}
+      ${sec("regras", "Como usar", lines(g.dos).length || lines(g.donts).length ? `<div class="gv-rules">${lines(g.dos).length ? `<div class="gv-do"><h3>Pode</h3><ul>${lines(g.dos).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${lines(g.donts).length ? `<div class="gv-dont"><h3>Não pode</h3><ul>${lines(g.donts).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}</div>` : "")}
+      <section class="gv-sec gv-rev"><h2>${S.isOwner ? "Aprovação do <em>cliente</em>" : "Sua <em>aprovação</em>"}</h2>
+        <div class="current"><span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].long}</span>${r.at && st !== "pendente" ? `<span>por ${esc(nameOf(r))} · ${esc(fmtStamp(r.at))}</span>` : ""}</div>
+        ${r.note && hasStk(st) ? `<div class="studio-note" style="border-color:${ST[st].color}">${esc(r.note)}</div>` : ""}
+        ${S.isOwner ? `<div class="actions">${st === "alteracao" || st === "reprovado" ? `<button class="btn pri sm" data-act="g-adjusted">Marcar como ajustado</button>` : ""}<button class="btn sm" data-act="guide-edit">Editar guia</button>${hasStk(st) ? `<button class="btn sm ghost" data-act="g-clear">Tirar sticker</button>` : ""}</div>
+          <label class="field" style="margin-top:12px"><span>Responder o cliente</span><textarea id="g-note" rows="2" placeholder="Escreva para o cliente">${esc(e.ask === "geral" ? e.note || "" : "")}</textarea></label><div class="actions"><button class="btn sm brand" data-act="g-send" data-k="geral">Responder</button></div>`
+        : `${st === "ajustado" ? `<p class="adj-note">O estúdio ajustou o guia. Confira e escolha o sticker de novo.</p>` : ""}<p class="hint">Gostou do guia? Escolha o sticker. Se quiser mudar algo, use “Comentar” na parte certa ou o sticker de ajustes.</p>
+          <div class="gv-stks">${DECISIONS.map(s => `<button class="opt" data-act="g-pick" data-s="${s}" aria-pressed="${st === s}" aria-label="${ST[s].long}" ${S.busy ? "disabled" : ""}><span class="mini">${sticker(s)}</span><small>${ST[s].label}</small></button>`).join("")}</div>
+          ${e.ask === "geral" ? `<div class="gv-ask"><textarea id="g-note" rows="3" placeholder="O que precisa ajustar no guia?">${esc(e.note || "")}</textarea>${S.who ? "" : `<input type="text" id="who" placeholder="Seu nome" autocomplete="name">`}<div class="actions"><button class="btn sm brand" data-act="g-send" data-k="geral" data-s="${esc(e.askStatus || "")}">Enviar</button><button class="btn sm ghost" data-act="g-ask" data-k="">Depois</button></div></div>` : ""}`}
+        ${hist.length ? `<div class="block"><h3>Comentários e histórico</h3><div class="history">${hist.map(h => `<div class="hi"><i class="dot" style="background:${h.kind === "comment" ? "var(--pink)" : ST[h.status]?.color || "#888"};margin-top:6px"></i><div><div><b>${h.kind === "comment" ? "Comentário" : esc(ST[h.status]?.long || h.status)}</b> · ${esc(nameOf(h))}${h.section && h.section !== "geral" ? ` · ${esc(GSECTIONS[h.section] || "")}` : ""}</div><div class="when">${esc(fmtStamp(h.at))}</div><p>${esc(h.note)}</p></div></div>`).join("")}</div></div>` : ""}
+      </section>
+    </div></div>`;
+}
+async function guideReview(status, note) {
+  if (S.busy) return; const e = S.editor; S.busy = true; renderSheet();
+  try { const r = await api(`/api/c/${S.token}/guide-review`, { method: "POST", body: { status, note: note || "", name: S.who } }); S.guide = r.guide; toast(ST[status].long); if (status === "alteracao" && !note) { e.ask = "geral"; e.askStatus = "alteracao"; } else { e.ask = null; e.note = ""; } }
+  catch (x) { toast(x.message); }
+  S.busy = false; render(); if (S.editor === e) renderSheet();
+}
+async function guideComment(section) {
+  const e = S.editor; const note = ($("#g-note")?.value || "").trim();
+  if (!note) { toast("Escreva o comentário"); $("#g-note")?.focus(); return; }
+  if (S.busy) return; S.busy = true;
+  try {
+    const r = S.isOwner ? await api(`/api/admin/clients/${S.clientId}/guide/comment`, { method: "POST", body: { note, section } })
+      : await api(`/api/c/${S.token}/guide-comment`, { method: "POST", body: { note, section, name: S.who } });
+    S.guide = r.guide; e.ask = null; e.note = ""; toast(S.isOwner ? "Resposta enviada" : "Comentário enviado para o estúdio");
+  } catch (x) { toast(x.message); }
+  S.busy = false; render(); if (S.editor === e) renderSheet();
+}
+async function guideAdmin(action, msg) {
+  if (S.busy) return; S.busy = true; const e = S.editor;
+  try { const r = await api(`/api/admin/clients/${S.clientId}/guide/${action}`, { method: "POST" }); S.guide = r.guide; toast(msg); } catch (x) { toast(x.message); }
+  S.busy = false; render(); if (S.editor === e) renderSheet();
+}
+
+if (typeof PLAN_SHEETS !== "undefined") Object.assign(PLAN_SHEETS, { guide: guideForm, guideview: guideView });
+
+function guideClick(a, b) {
+  const e = S.editor;
+  switch (a) {
+    case "guide-edit": closeSheet(); S.editor = { kind: "guide", data: S.guide ? JSON.parse(JSON.stringify(S.guide)) : newGuide(), err: "" }; if (!S.editor.data.fonts?.length) S.editor.data.fonts = []; renderSheet(); break;
+    case "guide-open": closeSheet(); S.editor = { kind: "guideview", sheetCls: "sheet-gv", ask: null, note: "" }; renderSheet(); break;
+    case "g-add": if (b.dataset.k === "colors") e.data.colors.push({ name: "", hex: "#141014", role: "" }); else e.data.fonts.push({ name: "", role: e.data.fonts.length ? "Textos" : "Títulos", weights: "", sample: "" }); renderSheet(); break;
+    case "g-rm": e.data[b.dataset.k].splice(Number(b.dataset.i), 1); renderSheet(); break;
+    case "g-save": saveGuide(b.dataset.vis === "1", b.dataset.nv === "1"); break;
+    case "g-del": if (S.armed !== "guide") { S.armed = "guide"; renderSheet(); break; }
+      api(`/api/admin/clients/${S.clientId}/guide`, { method: "DELETE" }).then(() => { S.guide = null; S.armed = null; closeSheet(); render(); toast("Guia excluído"); }).catch(x => toast(x.message)); break;
+    case "g-ask": e.ask = b.dataset.k || null; e.askStatus = ""; e.note = ""; renderSheet(); if (e.ask) setTimeout(() => $("#g-note")?.focus(), 40); break;
+    case "g-send": { const k = b.dataset.k || "geral"; if (b.dataset.s === "alteracao" && !S.isOwner) { const note = ($("#g-note")?.value || "").trim(); if (!note) { toast("Conte o que precisa ajustar"); break; } guideComment(k); break; } guideComment(k); break; }
+    case "g-pick": { const s = b.dataset.s; if (guideSt() === s && s !== "alteracao") { toast("O guia já está com esse sticker"); break; } guideReview(s); break; }
+    case "g-adjusted": guideAdmin("adjusted", "Guia marcado como ajustado"); break;
+    case "g-clear": guideAdmin("clear", "Sticker removido"); break;
+  }
+}
+document.addEventListener("input", ev => {
+  const e = S.editor, t = ev.target; if (!e) return;
+  if (e.kind === "guide") {
+    if (t.dataset.g) e.data[t.dataset.g] = t.value;
+    const set = (arr, path) => { const [i, f] = path.split("."); const o = arr[Number(i)]; if (o) o[f] = t.value; };
+    if (t.dataset.gc) { set(e.data.colors, t.dataset.gc); if (t.dataset.gc.endsWith(".hex") && /^#[0-9a-f]{6}$/i.test(t.value)) { const twin = [...document.querySelectorAll(`[data-gc="${t.dataset.gc}"]`)].find(x => x !== t); if (twin) twin.value = t.value.toLowerCase(); } }
+    if (t.dataset.gf) { set(e.data.fonts, t.dataset.gf); const i = Number(t.dataset.gf.split(".")[0]); const f = e.data.fonts[i]; const pv = t.closest(".g-font")?.querySelector(".g-font-prev"); if (pv && f) { pv.textContent = f.sample || f.name; } }
+    if (t.dataset.gl) { const [k, i, f] = t.dataset.gl.split("."); const o = e.data[k]?.[Number(i)]; if (o) o[f] = t.value; }
+  }
+  if (e.kind === "guideview" && t.id === "g-note") e.note = t.value;
+});
+document.addEventListener("change", ev => {
+  const t = ev.target, e = S.editor; if (e?.kind !== "guide") return;
+  if (t.matches("[data-g-upload]") && t.files.length) { const f = [...t.files]; t.value = ""; uploadGuide(t.dataset.gUpload, f); }
+  if (t.dataset.gf && t.dataset.gf.endsWith(".name")) { loadFonts(e.data.fonts); renderSheet(); }
+  if (t.dataset.gl && t.dataset.gl.endsWith(".bg")) renderSheet();
+});

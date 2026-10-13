@@ -1,6 +1,6 @@
 /* Deixa o app instalável e abre rápido. Dados (/api) sempre vêm da internet. */
-const CACHE = "aprovacoes-20261001144848";
-const SHELL = ["/", "/index.html", "/app.js", "/plan.js", "/style.css", "/larot.png", "/stickers/aprovado.png", "/stickers/alteracao.png", "/stickers/reprovado.png"];
+const CACHE = "aprovacoes-20261013145614";
+const SHELL = ["/", "/index.html", "/app.js", "/plan.js", "/digital.js", "/guide.js", "/style.css", "/larot.png", "/stickers/aprovado.png", "/stickers/alteracao.png", "/stickers/reprovado.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", (e) => {

@@ -2,7 +2,7 @@
 
 Central de aprovação de posts e anúncios do ALL TORAL, com os stickers do Larot.
 
-- **Painel do estúdio** (`/admin`): protegido por senha. Você cadastra clientes (nome, @, redes, cor e logo), sobe artes, vídeos e capas, legenda e, nos anúncios, a segmentação.
+- **Painel do estúdio** (`/admin`): protegido por senha. Você cadastra clientes de **redes sociais** (posts, anúncios e planejamento) ou de **produtos digitais** (sites, páginas de venda e apps), e o **guia visual** de cada um.
 - **Página do cliente** (`/c/<link-secreto>`): cada cliente recebe um link que abre só a página dele. Ele toca no sticker e o status muda na hora. Em "Precisa de ajustes" abre a caixa de comentário.
 - A separação é feita no servidor: um link nunca devolve dados de outro cliente. Para cortar o acesso, use "gere um link novo" na página do cliente.
 
@@ -25,6 +25,24 @@ A partir daí, toda alteração enviada ao GitHub é publicada sozinha. A senha 
 3. **Salvar rascunho** deixa escondido do cliente. **Enviar para o cliente** publica.
 4. **Copiar link do cliente** e mande para ele.
 5. Quando pedirem ajuste, edite a peça e use **Enviar nova versão para aprovação**.
+
+## Produtos digitais (sites, páginas de venda e apps)
+
+1. Em **Novo cliente**, escolha **Produtos digitais** e marque o que o estúdio faz (site, página de vendas, aplicativo, sistema).
+2. Na página do cliente, **+ Nova entrega**: tipo, nome e o **link do site no ar** (GitHub Pages, Netlify, Vercel ou Cloudflare). O link do repositório (github.com) não abre dentro de outra página; o Aprova sugere o endereço do GitHub Pages.
+3. Opcional: envie **telas** (prints da página inteira). O cliente circula direto na imagem.
+4. O cliente abre o projeto no modo **Computador** ou **Celular**, toca em **Circular e comentar**, circula o ponto e escreve a consideração. Você responde e marca como **resolvido**. Para mandar os ajustes, edite a entrega e use **Enviar nova versão**.
+5. Para os círculos ficarem presos no lugar certo quando o cliente rola a página, cole no site, antes do `</body>`:
+
+```
+<script src="https://SEU-APROVA/embed.js" async></script>
+```
+
+Ele só funciona quando o site está aberto dentro do Aprova. Sem ele, o círculo fica marcado na parte do site que estava na tela.
+
+## Guia visual (os dois tipos de cliente)
+
+Na página do cliente, **+ Guia visual**: logo e versões, cores (nome, código e uso), fontes do Google Fonts (com exemplo na fonte de verdade), elementos e aplicações, tom de voz e o que pode e não pode. O cliente abre o guia, comenta cada parte e aprova com os stickers do Larot.
 
 ## Limites
 

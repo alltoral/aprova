@@ -17,3 +17,12 @@
   Cache-Control: no-cache
 /version.json
   Cache-Control: no-store
+/digital.js
+  Cache-Control: no-cache
+/guide.js
+  Cache-Control: no-cache
+/plan.js
+  Cache-Control: no-cache
+/embed.js
+  Cache-Control: no-cache
+  Access-Control-Allow-Origin: *

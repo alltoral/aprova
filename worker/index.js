@@ -147,6 +147,90 @@ function cleanPost(body, prev, clientId) {
   return out;
 }
 
+/* ---------- produtos digitais: sites, páginas de venda e aplicativos ---------- */
+const CLIENT_KINDS = ["social", "digital"];
+const SERVICES = ["site", "landing", "app", "sistema"];
+const PROJECT_TYPES = ["site", "landing", "app", "sistema"];
+const DEVICES = ["desktop", "mobile"];
+const num = (v, min, max) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null; };
+function cleanUrl(v) {
+  const s = str(v, 600).trim();
+  if (!s) return "";
+  try { const u = new URL(/^https?:\/\//i.test(s) ? s : "https://" + s); return /^https?:$/.test(u.protocol) ? u.href : ""; } catch { return ""; }
+}
+const mediaRef = (m, clientId, imageOnly) => m && typeof m.id === "string" && m.id.startsWith(clientId + "/") && (!imageOnly || /^image\//.test(m.type || "")) ? { id: m.id, type: str(m.type, 60) } : null;
+function cleanProject(body, prev, clientId) {
+  const shots = (Array.isArray(body.shots) ? body.shots : []).slice(0, 20).map((s) => {
+    const m = mediaRef(s, clientId, true); if (!m) return null;
+    return { ...m, label: str(s.label, 80).trim(), device: DEVICES.includes(s.device) ? s.device : "desktop", w: num(s.w, 1, 20000) || 0, h: num(s.h, 1, 100000) || 0 };
+  }).filter(Boolean);
+  const visible = body.visible !== false;
+  return {
+    id: prev?.id,
+    clientId,
+    type: PROJECT_TYPES.includes(body.type) ? body.type : prev?.type || "site",
+    title: str(body.title, 160).trim() || "Projeto sem título",
+    url: cleanUrl(body.url),
+    repo: cleanUrl(body.repo),
+    device: DEVICES.includes(body.device) ? body.device : "desktop",
+    studioNote: str(body.studioNote, 3000),
+    shots,
+    version: prev?.version || 1,
+    visible,
+    notes: prev?.notes || [],
+    review: prev?.review || { status: "pendente", history: [] },
+    delivered: prev?.delivered || null,
+    createdAt: prev?.createdAt || now(),
+    updatedAt: now(),
+    sentAt: prev?.sentAt || (visible ? now() : null),
+  };
+}
+/* marcação: um círculo no site (posição na página, na tela visível ou numa tela enviada) com o comentário */
+function cleanShape(s) {
+  if (!s || typeof s !== "object") return null;
+  const mode = ["doc", "view", "shot"].includes(s.mode) ? s.mode : null;
+  if (!mode) return null;
+  const big = mode === "doc" ? 100000 : 1;
+  const out = { mode, x: num(s.x, 0, big), y: num(s.y, 0, big), w: num(s.w, 0, big), h: num(s.h, 0, big) };
+  if ([out.x, out.y, out.w, out.h].some((v) => v == null)) return null;
+  if (mode === "doc") { out.vw = num(s.vw, 200, 4000) || 1280; out.path = str(s.path, 300); }
+  if (mode === "view") out.vw = num(s.vw, 200, 4000) || 1280;
+  if (mode === "shot") { if (!/^[a-z0-9]{4,40}\/[a-z0-9]{8,40}$/.test(s.shot || "")) return null; out.shot = s.shot; }
+  return out;
+}
+const openNotes = (p) => (p.notes || []).filter((n) => !n.resolved).length;
+
+/* ---------- guia visual: cores, fontes, logos e regras para o cliente aprovar ---------- */
+const GUIDE_SECTIONS = ["geral", "logo", "cores", "fontes", "elementos", "voz", "regras"];
+function cleanGuide(body, prev, clientId) {
+  const colors = (Array.isArray(body.colors) ? body.colors : []).slice(0, 24).map((c) => ({
+    name: str(c?.name, 60).trim(), hex: /^#[0-9a-f]{6}$/i.test(c?.hex || "") ? c.hex.toLowerCase() : "#000000", role: str(c?.role, 160).trim(),
+  }));
+  const fonts = (Array.isArray(body.fonts) ? body.fonts : []).slice(0, 8).map((f) => ({
+    name: str(f?.name, 80).trim(), role: str(f?.role, 80).trim(), weights: str(f?.weights, 80).trim(), sample: str(f?.sample, 200).trim(), google: f?.google !== false,
+  })).filter((f) => f.name);
+  const imgs = (list, max) => (Array.isArray(list) ? list : []).slice(0, max).map((m) => { const r = mediaRef(m, clientId, true); return r ? { ...r, label: str(m.label, 80).trim(), bg: ["light", "dark", "brand"].includes(m.bg) ? m.bg : "light" } : null; }).filter(Boolean);
+  const visible = body.visible !== false;
+  return {
+    clientId,
+    title: str(body.title, 120).trim() || "Guia visual",
+    intro: str(body.intro, 3000),
+    logos: imgs(body.logos, 12),
+    colors,
+    fonts,
+    elements: imgs(body.elements, 24),
+    voice: str(body.voice, 3000),
+    dos: str(body.dos, 3000),
+    donts: str(body.donts, 3000),
+    version: prev?.version || 1,
+    visible,
+    review: prev?.review || { status: "pendente", history: [] },
+    createdAt: prev?.createdAt || now(),
+    updatedAt: now(),
+    sentAt: prev?.sentAt || (visible ? now() : null),
+  };
+}
+
 function cleanClient(body, prev) {
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#e55496";
   let handle = str(body.handle, 60).trim();
@@ -158,6 +242,8 @@ function cleanClient(body, prev) {
     handle,
     nicho: str(body.nicho, 80),
     nickname: typeof body.nickname === "string" ? str(body.nickname, 60).trim() : prev?.nickname || "",
+    kind: CLIENT_KINDS.includes(body.kind) ? body.kind : prev?.kind || "social",
+    services: Array.isArray(body.services) ? [...new Set(body.services.filter((s) => SERVICES.includes(s)))] : prev?.services || [],
     color,
     networks: Array.isArray(body.networks) ? [...new Set(body.networks.filter((n) => NETWORKS.includes(n)))] : prev?.networks || ["instagram"],
     ads: typeof body.ads === "boolean" ? body.ads : !!prev?.ads,
@@ -222,6 +308,7 @@ function cleanPlan(body, prev, clientId) {
     seenAt: prev?.seenAt || null,
   };
 }
+const sortProjects = (list) => list.sort((a, b) => String(b.sentAt || b.createdAt || "").localeCompare(String(a.sentAt || a.createdAt || "")));
 const sortPlans = (list) => list.sort((a, b) => String(b.start || b.createdAt).localeCompare(String(a.start || a.createdAt)));
 const openIdeas = (plan) => (plan.ideas || []).filter((i) => ["pendente", "ajustado"].includes(i.review?.status || "pendente")).length;
 
@@ -241,9 +328,17 @@ async function touchVisit(db, client) {
 }
 
 /* avisos do painel: cliente respondeu, prazo estourando, postado e cliente sumido */
-function alertsFor(client, posts, plans, seen = {}) {
+function alertsFor(client, posts, plans, seen = {}, projects = [], guide = null) {
   const t = Date.now(); const day = 24 * 60 * 60 * 1000;
   const replies = [];
+  projects.forEach((p) => {
+    (p.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: p.title, where: "project", id: p.id }); });
+    (p.notes || []).forEach((n) => {
+      if (n.by === "client") replies.push({ at: n.at, who: n.byLabel || client.name, status: "alteracao", kind: "comment", note: n.text || "", title: p.title, where: "project", id: p.id });
+      (n.replies || []).forEach((r) => { if (r.by === "client") replies.push({ at: r.at, who: r.byLabel || client.name, status: "alteracao", kind: "comment", note: r.text || "", title: p.title, where: "project", id: p.id }); });
+    });
+  });
+  if (guide) (guide.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: guide.title || "Guia visual", where: "guide", id: "guide" }); });
   posts.forEach((p) => (p.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: p.title, where: "post", id: p.id }); }));
   plans.forEach((pl) => (pl.ideas || []).forEach((i) => (i.review?.history || []).forEach((h) => { if (h.byLabel !== "ALL TORAL" && h.at && (h.note || h.status !== "aprovado")) replies.push({ at: h.at, who: h.byLabel || client.name, status: h.status, kind: h.kind, note: h.note || "", title: i.title, where: "plan", id: pl.id }); })));
   replies.sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -334,8 +429,82 @@ async function handle(req, env) {
         const posts = sortPosts((await listJSON(db, `posts/${client.id}/`)).filter((p) => p.visible !== false));
         const requests = sortReqs(await listJSON(db, `requests/${client.id}/`));
         const plans = sortPlans((await listJSON(db, `plans/${client.id}/`)).filter((p) => p.visible !== false));
+        const projects = sortProjects((await listJSON(db, `projects/${client.id}/`)).filter((p) => p.visible !== false));
+        const g = await db.get(`guides/${client.id}`, { type: "json" });
+        const guide = g && g.visible !== false ? g : null;
         const visits = await touchVisit(db, client);
-        return json({ client: publicClient(client), posts, requests, plans, visits: { prev: visits.prev, welcomed: !!client.welcomedAt } });
+        return json({ client: publicClient(client), posts, requests, plans, projects, guide, visits: { prev: visits.prev, welcomed: !!client.welcomedAt } });
+      }
+      /* ---------- produtos digitais: aprovação e marcações do cliente ---------- */
+      if (method === "POST" && parts[2] && parts[2].startsWith("project-") && parts.length === 3) {
+        const body = await readBody(req);
+        if (!safeId(body.projectId)) return fail("Projeto não encontrado", 404);
+        const key = `projects/${client.id}/${body.projectId}`;
+        const project = await db.get(key, { type: "json" });
+        if (!project || project.visible === false) return fail("Projeto não encontrado", 404);
+        const name = str(body.name, 80).trim() || client.name;
+        const at = now();
+        const action = parts[2];
+        if (action === "project-review") {
+          const status = body.status; const note = str(body.note, 4000).trim();
+          if (!["aprovado", "alteracao", "reprovado"].includes(status)) return fail("Escolha um sticker");
+          if (project.review?.status === status && !note) return json({ project });
+          project.review = addHistory(project, { kind: "review", status, note, byLabel: name, at, v: project.version });
+          Object.assign(project.review, { status, note, byLabel: name, at });
+        } else if (action === "project-comment") {
+          const note = str(body.note, 4000).trim();
+          if (!note) return fail("Escreva o comentário");
+          project.review = addHistory(project, { kind: "comment", status: project.review?.status || "pendente", note, byLabel: name, at, v: project.version });
+        } else if (action === "project-note") {
+          const text = str(body.text, 3000).trim();
+          if (!text) return fail("Escreva o que você quer mudar nesse ponto");
+          const shape = cleanShape(body.shape);
+          if (!shape) return fail("Marque o ponto no site antes de enviar");
+          if (shape.mode === "shot" && !(project.shots || []).some((s) => s.id === shape.shot)) return fail("Essa tela não existe mais. Atualize a página.");
+          const notes = project.notes || [];
+          if (notes.length >= 300) return fail("Este projeto já tem muitas considerações. Fale com o estúdio.");
+          const n = notes.reduce((m, x) => Math.max(m, x.n || 0), 0) + 1;
+          notes.push({ id: rid(8), n, by: "client", byLabel: name, at, text, shape, device: DEVICES.includes(body.device) ? body.device : "desktop", v: project.version, resolved: false, replies: [] });
+          project.notes = notes;
+        } else if (action === "project-note-reply" || action === "project-note-del") {
+          const note = (project.notes || []).find((x) => x.id === body.noteId);
+          if (!note) return fail("Consideração não encontrada", 404);
+          if (action === "project-note-reply") {
+            const text = str(body.text, 3000).trim();
+            if (!text) return fail("Escreva a resposta");
+            note.replies = [...(note.replies || []), { by: "client", byLabel: name, at, text }].slice(-40);
+            if (note.resolved) note.resolved = false;
+          } else {
+            if (note.by !== "client" || (note.replies || []).some((r) => r.by === "studio")) return fail("Essa consideração já foi respondida pelo estúdio e não pode ser apagada.");
+            project.notes = project.notes.filter((x) => x.id !== note.id);
+          }
+        } else return fail("Rota não encontrada", 404);
+        project.updatedAt = at;
+        await db.setJSON(key, project);
+        return json({ project });
+      }
+      /* ---------- guia visual: aprovação do cliente ---------- */
+      if (method === "POST" && (parts[2] === "guide-review" || parts[2] === "guide-comment") && parts.length === 3) {
+        const body = await readBody(req);
+        const key = `guides/${client.id}`;
+        const guide = await db.get(key, { type: "json" });
+        if (!guide || guide.visible === false) return fail("Guia não encontrado", 404);
+        const name = str(body.name, 80).trim() || client.name;
+        const note = str(body.note, 4000).trim();
+        const section = GUIDE_SECTIONS.includes(body.section) ? body.section : "geral";
+        const at = now();
+        if (parts[2] === "guide-review") {
+          const status = body.status;
+          if (!["aprovado", "alteracao", "reprovado"].includes(status)) return fail("Escolha um sticker");
+          if (guide.review?.status === status && !note) return json({ guide });
+          guide.review = addHistory(guide, { kind: "review", status, note, section, byLabel: name, at, v: guide.version });
+          Object.assign(guide.review, { status, note, byLabel: name, at });
+        } else {
+          if (!note) return fail("Escreva o comentário");
+          guide.review = addHistory(guide, { kind: "comment", status: guide.review?.status || "pendente", note, section, byLabel: name, at, v: guide.version });
+        }
+        await db.setJSON(key, guide);
+        return json({ guide });
       }
       if (method === "POST" && parts[2] === "welcomed" && parts.length === 3) {
         if (!client.welcomedAt) { client.welcomedAt = now(); await db.setJSON(`clients/${client.id}`, client); }
@@ -557,7 +726,12 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const reqs = (await listJSON(db, `requests/${cl.id}/`)).filter((r) => r.status === "novo").length;
             const plans = (await listJSON(db, `plans/${cl.id}/`)).filter((p) => p.visible !== false);
             const planOpen = plans.reduce((t, p) => t + openIdeas(p), 0);
-            return { ...cl, counts: { ...counts, publicado: all.length - posts.length, pedidos: reqs, ideias: planOpen }, alerts: alertsFor(cl, all, plans, seen) };
+            const projects = (await listJSON(db, `projects/${cl.id}/`)).filter((p) => p.visible !== false);
+            const live = projects.filter((p) => !p.delivered);
+            live.forEach((p) => counts[STATUSES.includes(p.review?.status) ? p.review.status : "pendente"]++);
+            const g = await db.get(`guides/${cl.id}`, { type: "json" });
+            const guide = g && g.visible !== false ? g : null;
+            return { ...cl, counts: { ...counts, publicado: all.length - posts.length + (projects.length - live.length), pedidos: reqs, ideias: planOpen, notas: live.reduce((t, p) => t + openNotes(p), 0), projetos: projects.length, guia: guide ? guide.review?.status || "pendente" : null }, alerts: alertsFor(cl, all, plans, seen, projects, guide) };
           })
         );
         return json({ clients: withCounts.sort((x, y) => x.name.localeCompare(y.name)) });
@@ -583,7 +757,109 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           const posts = sortPosts(await listJSON(db, `posts/${b}/`));
           const requests = sortReqs(await listJSON(db, `requests/${b}/`));
           const plans = sortPlans(await listJSON(db, `plans/${b}/`));
-          return json({ client, posts, requests, plans });
+          const projects = sortProjects(await listJSON(db, `projects/${b}/`));
+          const guide = await db.get(`guides/${b}`, { type: "json" });
+          return json({ client, posts, requests, plans, projects, guide });
+        }
+        /* ---------- guia visual (estúdio) ---------- */
+        if (c === "guide") {
+          const key = `guides/${b}`;
+          const prev = await db.get(key, { type: "json" });
+          if (!d && method === "PUT") {
+            const body = await readBody(req);
+            const guide = cleanGuide(body, prev, b);
+            if (!guide.colors.length && !guide.fonts.length && !guide.logos.length) return fail("Coloque pelo menos uma cor, uma fonte ou um logo no guia");
+            if (body.newVersion && prev) {
+              const was = prev.review?.status;
+              const to = was === "alteracao" || was === "reprovado" ? "ajustado" : "pendente";
+              guide.version = (prev.version || 1) + 1; guide.sentAt = now(); guide.visible = true;
+              guide.review = addHistory(guide, { kind: "review", status: to, note: to === "ajustado" ? `Versão ${guide.version} com os ajustes` : `Versão ${guide.version} enviada`, byLabel: "ALL TORAL", at: now(), v: guide.version });
+              Object.assign(guide.review, { status: to, note: "", at: now(), byLabel: "ALL TORAL" });
+            }
+            await db.setJSON(key, guide);
+            return json({ guide });
+          }
+          if (!prev) return fail("Guia não encontrado", 404);
+          if (!d && method === "DELETE") { await db.delete(key); return json({ ok: true }); }
+          if (method === "POST" && ["adjusted", "resend", "clear", "comment"].includes(d)) {
+            if (d === "comment") {
+              const body = await readBody(req); const note = str(body.note, 4000).trim();
+              if (!note) return fail("Escreva o comentário");
+              prev.review = addHistory(prev, { kind: "comment", status: prev.review?.status || "pendente", note, section: GUIDE_SECTIONS.includes(body.section) ? body.section : "geral", byLabel: "ALL TORAL", at: now(), v: prev.version });
+            } else if (d === "clear") {
+              Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            } else {
+              const to = d === "adjusted" ? "ajustado" : "pendente";
+              prev.version = (prev.version || 1) + 1; prev.sentAt = now(); prev.visible = true;
+              prev.review = addHistory(prev, { kind: "review", status: to, note: d === "adjusted" ? "Guia ajustado pelo estúdio" : "Nova versão do guia enviada", byLabel: "ALL TORAL", at: now(), v: prev.version });
+              Object.assign(prev.review, { status: to, note: "", at: now(), byLabel: "ALL TORAL" });
+            }
+            await db.setJSON(key, prev);
+            return json({ guide: prev });
+          }
+        }
+        /* ---------- produtos digitais (estúdio) ---------- */
+        if (c === "projects" && !d && method === "POST") {
+          const body = await readBody(req);
+          const project = cleanProject(body, null, b);
+          if (!project.url && !project.shots.length) return fail("Coloque o link do site ou envie pelo menos uma tela");
+          project.id = rid(10);
+          await db.setJSON(`projects/${b}/${project.id}`, project);
+          return json({ project });
+        }
+        if (c === "projects" && safeId(d)) {
+          const key = `projects/${b}/${d}`;
+          const prev = await db.get(key, { type: "json" });
+          if (!prev) return fail("Projeto não encontrado", 404);
+          if (!e && method === "PUT") {
+            const body = await readBody(req);
+            const project = cleanProject(body, prev, b);
+            if (!project.url && !project.shots.length) return fail("Coloque o link do site ou envie pelo menos uma tela");
+            if (body.newVersion) {
+              const was = prev.review?.status;
+              const to = was === "alteracao" || was === "reprovado" ? "ajustado" : "pendente";
+              project.version = (prev.version || 1) + 1; project.sentAt = now(); project.visible = true;
+              project.review = addHistory(project, { kind: "review", status: to, note: to === "ajustado" ? `Versão ${project.version} com os ajustes` : `Versão ${project.version} enviada`, byLabel: "ALL TORAL", at: now(), v: project.version });
+              Object.assign(project.review, { status: to, note: "", at: now(), byLabel: "ALL TORAL" });
+            }
+            await db.setJSON(key, project);
+            return json({ project });
+          }
+          if (!e && method === "DELETE") { await db.delete(key); return json({ ok: true }); }
+          if (e === "notes" && method === "POST") {
+            const note = (prev.notes || []).find((x) => x.id === parts[6]);
+            if (!note) return fail("Consideração não encontrada", 404);
+            const body = await readBody(req);
+            if (parts[7] === "resolve") note.resolved = !!body.resolved;
+            else if (parts[7] === "reply") {
+              const text = str(body.text, 3000).trim();
+              if (!text) return fail("Escreva a resposta");
+              note.replies = [...(note.replies || []), { by: "studio", byLabel: "ALL TORAL", at: now(), text }].slice(-40);
+              if (body.resolve) note.resolved = true;
+            } else if (parts[7] === "delete") prev.notes = prev.notes.filter((x) => x.id !== note.id);
+            else return fail("Rota não encontrada", 404);
+            prev.updatedAt = now();
+            await db.setJSON(key, prev);
+            return json({ project: prev });
+          }
+          if (method === "POST" && ["adjusted", "clear", "comment", "delivered"].includes(e)) {
+            const body = await readBody(req);
+            if (e === "comment") {
+              const note = str(body.note, 4000).trim();
+              if (!note) return fail("Escreva o comentário");
+              prev.review = addHistory(prev, { kind: "comment", status: prev.review?.status || "pendente", note, byLabel: "ALL TORAL", at: now(), v: prev.version });
+            } else if (e === "clear") {
+              Object.assign(prev.review, { status: "pendente", note: "", at: now(), byLabel: "ALL TORAL" });
+            } else if (e === "delivered") {
+              prev.delivered = body.delivered ? { at: now() } : null;
+            } else {
+              prev.sentAt = now();
+              prev.review = addHistory(prev, { kind: "review", status: "ajustado", note: "Ajustes feitos pelo estúdio", byLabel: "ALL TORAL", at: now(), v: prev.version });
+              Object.assign(prev.review, { status: "ajustado", note: "", at: now(), byLabel: "ALL TORAL" });
+            }
+            await db.setJSON(key, prev);
+            return json({ project: prev });
+          }
         }
         if (c === "plans" && !d && method === "POST") {
           const body = await readBody(req);
@@ -649,6 +925,8 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           await db.deletePrefix(`posts/${b}/`);
           await db.deletePrefix(`requests/${b}/`);
           await db.deletePrefix(`plans/${b}/`);
+          await db.deletePrefix(`projects/${b}/`);
+          await db.delete(`guides/${b}`);
           await media.deletePrefix(`${b}/`);
           if (client.token) await db.delete(`tokens/${client.token}`);
           await db.delete(`clients/${b}`);
