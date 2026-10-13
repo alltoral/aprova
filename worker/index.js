@@ -231,7 +231,8 @@ function cleanGuide(body, prev, clientId) {
   };
 }
 
-function cleanClient(body, prev) {
+function cleanClient(body, prev) { return withKind(cleanClientRaw(body, prev)); }
+function cleanClientRaw(body, prev) {
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#e55496";
   let handle = str(body.handle, 60).trim();
   if (handle && !handle.startsWith("@")) handle = "@" + handle;
@@ -242,7 +243,7 @@ function cleanClient(body, prev) {
     handle,
     nicho: str(body.nicho, 80),
     nickname: typeof body.nickname === "string" ? str(body.nickname, 60).trim() : prev?.nickname || "",
-    kind: CLIENT_KINDS.includes(body.kind) ? body.kind : prev?.kind || "social",
+    kinds: (() => { const k = Array.isArray(body.kinds) ? [...new Set(body.kinds.filter((x) => CLIENT_KINDS.includes(x)))] : CLIENT_KINDS.includes(body.kind) ? [body.kind] : prev?.kinds || [prev?.kind || "social"]; return k.length ? k : ["social"]; })(),
     services: Array.isArray(body.services) ? [...new Set(body.services.filter((s) => SERVICES.includes(s)))] : prev?.services || [],
     color,
     networks: Array.isArray(body.networks) ? [...new Set(body.networks.filter((n) => NETWORKS.includes(n)))] : prev?.networks || ["instagram"],
@@ -256,6 +257,8 @@ function cleanClient(body, prev) {
   };
 }
 
+/* compatibilidade: "kind" continua existindo (social quando o cliente tem redes sociais) */
+function withKind(c) { c.kind = (c.kinds || []).includes("social") ? "social" : "digital"; return c; }
 function publicClient(c) {
   const { token: _t, ...rest } = c;
   return rest;

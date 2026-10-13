@@ -61,6 +61,14 @@ function digitalPage(c) {
     <div style="height:48px"></div>
   </main>` + foot();
 }
+/* clientes com redes sociais e produtos digitais: os projetos entram na mesma página */
+function digitalSection(c) {
+  const all = visibleProjects(); const live = all.filter(p => !p.delivered), done = all.filter(p => p.delivered);
+  if (!S.isOwner && !all.length) return "";
+  return `<section class="dp-sec"><div class="section-h"><h2>${S.isOwner ? "Site e <em>apps</em>" : "Seus <em>projetos</em>"}</h2><div class="actions"><span class="eyebrow">${live.length} em aprovação</span>${S.isOwner ? `<button class="btn sm pri" data-act="dp-new">+ Nova entrega</button>` : ""}</div></div>
+    ${live.length ? `<div class="dp-grid">${live.map(projectCard).join("")}</div>` : S.isOwner ? `<div class="emptybox"><h3>Nenhuma entrega ainda</h3><p>Cadastre o site ou o app com o link para o cliente ver e circular o que quer mudar.</p></div>` : ""}
+    ${done.length ? `<p class="eyebrow" style="margin-top:18px">Já entregues</p><div class="dp-grid">${done.map(projectCard).join("")}</div>` : ""}</section>`;
+}
 function frameThumb(p) {
   const s = (p.shots || [])[0];
   if (s) return `<img class="dp-thumb-img" src="${blob(s.id)}" alt="" loading="lazy">`;

@@ -1007,3 +1007,9 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 @media (max-width:600px){.gv-cover{padding:40px 20px 26px}.gv-body{padding:4px 18px 24px}.gv-rules{grid-template-columns:1fr}.gv-f-big{font-size:56px}.gv-sec h2{font-size:25px}}
 .dv-h .seg{width:auto;flex:none}
 @media (min-width:761px){.sheet.sheet-dv~.toast{bottom:96px}}
+.kind-tags{display:flex;gap:6px;flex-wrap:wrap}
+.kp{position:relative;padding-left:44px}
+.kp-box{position:absolute;left:14px;top:15px;width:20px;height:20px;border-radius:6px;border:2px solid var(--line-2);background:#fff}
+.kp.on .kp-box{background:var(--pink);border-color:var(--pink)}
+.kp.on .kp-box::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.dp-sec{padding-bottom:12px}
