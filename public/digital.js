@@ -184,6 +184,7 @@ function dvHeader() {
     ${shots.length && p.url ? `<label class="dv-src"><span class="sr">Mostrar</span><select id="dv-src"><option value="live" ${e.source === "live" ? "selected" : ""}>Site ao vivo</option>${shots.map(s => `<option value="${esc(s.id)}" ${e.source === s.id ? "selected" : ""}>Tela: ${esc(s.label || "sem nome")}</option>`).join("")}</select></label>`
       : shots.length > 1 ? `<label class="dv-src"><span class="sr">Tela</span><select id="dv-src">${shots.map(s => `<option value="${esc(s.id)}" ${e.source === s.id ? "selected" : ""}>${esc(s.label || "Tela")}</option>`).join("")}</select></label>` : ""}
     ${p.url ? `<a class="btn sm ghost dv-ext" href="${esc(p.url)}" target="_blank" rel="noopener">Abrir em nova aba ↗</a>` : ""}
+    ${S.isOwner && (p.notes || []).length ? `<button class="btn sm ghost dv-pdf" data-act="dv-pdf" ${e.pdf ? "disabled" : ""} title="Baixar as considerações em PDF">${e.pdf ? "Gerando…" : "Baixar PDF"}</button>` : ""}
     <span class="pill dv-pill" style="background:${ST[st].color};color:${ST[st].ink}">${ST[st].label}</span>
     <button class="btn sm dv-sidebtn" data-act="dv-side" aria-expanded="${!!e.side}">${openN(p) ? `${openN(p)} ${openN(p) === 1 ? "consideração" : "considerações"}` : "Aprovação"}</button>
     <button class="x" data-act="close" aria-label="Fechar">✕</button>`;
@@ -345,12 +346,24 @@ async function sendNote() {
   const shape = draftShape();
   S.busy = true;
   try {
-    const r = await api(`/api/c/${S.token}/project-note`, { method: "POST", body: { projectId: p.id, text, shape, device: e.device, name: S.who } });
+    const el = shape?.mode === "doc" ? await pickEl(e.draft.px, e.box?.s || 1) : null;
+    const r = await api(`/api/c/${S.token}/project-note`, { method: "POST", body: { projectId: p.id, text, shape, el, device: e.device, name: S.who } });
     applyProject(r.project); const last = (r.project.notes || []).at(-1);
     e.draft = null; e.noteText = ""; e.sel = last?.id || null; e.filter = "open"; if (matchMedia("(max-width:760px)").matches) e.side = false;
     toast("Consideração enviada para o estúdio"); render();
   } catch (x) { if (err) { err.hidden = false; err.textContent = x.message; } }
   S.busy = false; if (S.editor === e) { dvHeader(); dvSide(); dvMarks(); }
+}
+/* pergunta ao ajudante do site qual elemento está no centro do círculo (para o PDF do estúdio) */
+const dvPicks = new Map();
+function pickEl(d, s) {
+  const fr = $("#dv-if"); if (!fr || !d) return Promise.resolve(null);
+  const id = Math.random().toString(36).slice(2);
+  return new Promise(ok => {
+    const t = setTimeout(() => { dvPicks.delete(id); ok(null); }, 700);
+    dvPicks.set(id, v => { clearTimeout(t); dvPicks.delete(id); ok(v && typeof v === "object" ? v : null); });
+    try { fr.contentWindow.postMessage({ aprova: "pick", id, x: (d.l + d.w / 2) / s, y: (d.t + d.h / 2) / s }, "*"); } catch (x) { clearTimeout(t); ok(null); }
+  });
 }
 async function dvCall(path, body, okMsg) {
   if (S.busy) return; S.busy = true; const e = S.editor;
@@ -379,7 +392,8 @@ function selectNote(id) {
 window.addEventListener("message", ev => {
   const e = S.editor; if (e?.kind !== "dview") return;
   const fr = $("#dv-if"); if (!fr || ev.source !== fr.contentWindow) return;
-  const m = ev.data; if (!m || typeof m !== "object" || (m.aprova !== "hello" && m.aprova !== "scroll")) return;
+  const m = ev.data; if (m && m.aprova === "picked") { dvPicks.get(m.id)?.(m.el); return; }
+  if (!m || typeof m !== "object" || (m.aprova !== "hello" && m.aprova !== "scroll")) return;
   const first = !e.helper; e.helper = true; e.loaded = true;
   e.scroll = { sx: +m.sx || 0, sy: +m.sy || 0, path: String(m.path || "").slice(0, 300), dh: +m.dh || 0 };
   $("#dv-hint") && ($("#dv-hint").hidden = true);
@@ -448,6 +462,7 @@ function digitalClick(a, b) {
     case "dv-dev": if (e.device !== b.dataset.k) { e.device = b.dataset.k; e.draft = null; const p = curProject(); if (e.source !== "live") { const s = shotsFor(p, e.device)[0]; if (s) e.source = s.id; } renderSheet(); } break;
     case "dv-mode": e.mark = b.dataset.k === "1"; e.draft = null; if (e.mark && matchMedia("(max-width:760px)").matches) e.side = false; renderSheet(); if (e.mark) toast("Arraste para circular o ponto"); break;
     case "dv-side": e.side = !e.side; renderSheet(); break;
+    case "dv-pdf": notesPdf(); break;
     case "dv-filter": e.filter = b.dataset.k; dvSide(); dvMarks(); break;
     case "dv-note-sel": selectNote(b.dataset.id); break;
     case "dv-note-send": sendNote(); break;
@@ -474,4 +489,81 @@ function celebrate() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const el = document.createElement("div"); el.className = "dv-yay"; el.innerHTML = sticker("aprovado"); document.body.appendChild(el);
   setTimeout(() => el.remove(), 1600);
+}
+
+/* ---------- PDF das considerações (só o estúdio): para passar os ajustes adiante ---------- */
+function loadJsPdf() {
+  if (window.jspdf) return Promise.resolve(window.jspdf);
+  return new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "/vendor/jspdf.umd.min.js"; sc.onload = () => ok(window.jspdf); sc.onerror = () => no(new Error("Não deu para carregar o gerador de PDF")); document.head.appendChild(sc); });
+}
+/* recorte da tela enviada com o círculo desenhado por cima */
+async function shotCrop(shot, sh, n) {
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = blob(shot.id); });
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const bx = sh.x * W, by = sh.y * H, bw = Math.max(8, sh.w * W), bh = Math.max(8, sh.h * H);
+  const pad = Math.max(bw, bh) * 1.1 + Math.min(W, H) * .08;
+  const cx = Math.max(0, bx - pad), cy = Math.max(0, by - pad), cw = Math.min(W, bx + bw + pad) - cx, ch = Math.min(H, by + bh + pad) - cy;
+  const k = Math.min(1, 900 / cw, 700 / ch), cv = document.createElement("canvas"); cv.width = Math.round(cw * k); cv.height = Math.round(ch * k);
+  const ctx = cv.getContext("2d"); ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cv.width, cv.height);
+  ctx.strokeStyle = "#e0245e"; ctx.lineWidth = 4; ctx.beginPath();
+  ctx.ellipse((bx - cx + bw / 2) * k, (by - cy + bh / 2) * k, bw * k / 2 + 6, bh * k / 2 + 6, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = "#e0245e"; ctx.beginPath(); ctx.arc((bx - cx) * k + 4, (by - cy) * k + 4, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(n), (bx - cx) * k + 4, (by - cy) * k + 4);
+  return { data: cv.toDataURL("image/jpeg", .85), w: cv.width, h: cv.height };
+}
+async function notesPdf() {
+  const e = S.editor, p = curProject(); if (!p || e.pdf) return;
+  e.pdf = true; dvHeader();
+  try {
+    const { jsPDF } = await loadJsPdf();
+    const doc = new jsPDF({ unit: "pt", format: "a4" }); const PW = 595, PH = 842, M = 44, TW = PW - M * 2;
+    const clean = t => String(t || "").normalize("NFC").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "...").replace(/[^\u0009\u000a\u0020-\u00ff]/g, "");
+    let y = M;
+    const need = h => { if (y + h > PH - M) { doc.addPage(); y = M; } };
+    const text = (t, o = {}) => {
+      const size = o.size || 10.5; doc.setFont("helvetica", o.bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...(o.color || [20, 16, 20]));
+      const x = M + (o.indent || 0), lines = doc.splitTextToSize(clean(t), TW - (o.indent || 0)); const lh = size * 1.35;
+      lines.forEach(l => { need(lh); doc.text(l, x, y + size); y += lh; }); y += o.after ?? 4;
+    };
+    const kv = (k, v, indent) => { if (v) text(`${k}: ${v}`, { size: 9.5, color: [90, 80, 88], indent, after: 2 }); };
+    const notes = (p.notes || []).slice().sort((a, b) => (a.resolved - b.resolved) || a.n - b.n);
+    const open = notes.filter(n => !n.resolved).length;
+    /* capa */
+    doc.setFillColor(229, 84, 150); doc.rect(0, 0, PW, 8, "F");
+    text("ALL TORAL · Aprova", { size: 9, bold: true, color: [194, 50, 122], after: 6 });
+    text(`Considerações · ${p.title}`, { size: 20, bold: true, after: 6 });
+    text(`${S.client?.name || ""} · ${PTYPES[p.type] || "Site"} · versão ${p.version || 1}`, { size: 11, color: [90, 80, 88], after: 2 });
+    if (p.url) text(p.url, { size: 10, color: [194, 50, 122], after: 2 });
+    text(`${open} em aberto · ${notes.length - open} resolvidas · gerado em ${fmtStamp(new Date().toISOString())}`, { size: 10, color: [90, 80, 88], after: 14 });
+    doc.setDrawColor(240, 214, 228); doc.line(M, y, PW - M, y); y += 16;
+    for (const n of notes) {
+      const sh = n.shape || {}, el = n.el || {};
+      need(90);
+      const tag = n.resolved ? "RESOLVIDA" : "EM ABERTO";
+      doc.setFillColor(...(n.resolved ? [223, 245, 232] : [253, 227, 239])); doc.roundedRect(M, y, 26, 20, 4, 4, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(20, 16, 20); doc.text(String(n.n), M + 13, y + 14, { align: "center" });
+      doc.setFontSize(8.5); doc.setTextColor(...(n.resolved ? [29, 122, 74] : [194, 50, 122])); doc.text(tag, M + 34, y + 9);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(90, 80, 88); doc.text(clean(`${n.byLabel || "Cliente"} · ${fmtStamp(n.at)} · versão ${n.v || 1} · ${DEV[n.device]?.label || "Computador"}`), M + 34, y + 19);
+      y += 30;
+      text(n.text, { size: 11.5, after: 6 });
+      if (sh.mode === "doc") {
+        kv("Página", sh.path || "/");
+        kv("Posição", `${Math.round(sh.x)} px da esquerda, ${Math.round(sh.y)} px do topo da página (círculo de ${Math.round(sh.w)} x ${Math.round(sh.h)} px, tela de ${sh.vw || 1280} px)`);
+      } else if (sh.mode === "view") kv("Posição na tela visível", `${Math.round(sh.x * 100)}% da esquerda, ${Math.round(sh.y * 100)}% do topo (tela de ${sh.vw || 1280} px)`);
+      else if (sh.mode === "shot") { const shot = (p.shots || []).find(s => s.id === sh.shot); kv("Tela", shot?.label || "Tela enviada"); }
+      kv("Seção", el.section); kv("Elemento", el.sel); kv("Texto no elemento", el.text); kv("Imagem", [el.alt, el.src].filter(Boolean).join(" · ")); kv("Link", el.href);
+      if (sh.mode === "shot") {
+        const shot = (p.shots || []).find(s => s.id === sh.shot);
+        if (shot) try { const c = await shotCrop(shot, sh, n.n); const w = Math.min(TW, c.w * .6), h = c.h * w / c.w; need(h + 8); doc.addImage(c.data, "JPEG", M, y + 4, w, h); y += h + 12; } catch (x) { /* sem imagem */ }
+      }
+      (n.replies || []).forEach(r => text(`${r.by === "studio" ? "ALL TORAL" : r.byLabel || "Cliente"} (${fmtStamp(r.at)}): ${r.text}`, { size: 9.5, color: r.by === "studio" ? [194, 50, 122] : [60, 52, 58], indent: 14, after: 2 }));
+      y += 8; need(12); doc.setDrawColor(240, 214, 228); doc.line(M, y, PW - M, y); y += 14;
+    }
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) { doc.setPage(i); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 140, 148); doc.text(clean(`${p.title} · página ${i} de ${pages}`), PW - M, PH - 20, { align: "right" }); }
+    const slug = String(p.title || "projeto").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    doc.save(`consideracoes-${slug}-v${p.version || 1}.pdf`);
+    toast("PDF baixado");
+  } catch (x) { toast(x.message || "Não deu para gerar o PDF"); }
+  e.pdf = false; if (S.editor === e) dvHeader();
 }

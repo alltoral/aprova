@@ -471,7 +471,8 @@ async function handle(req, env) {
           const notes = project.notes || [];
           if (notes.length >= 300) return fail("Este projeto já tem muitas considerações. Fale com o estúdio.");
           const n = notes.reduce((m, x) => Math.max(m, x.n || 0), 0) + 1;
-          notes.push({ id: rid(8), n, by: "client", byLabel: name, at, text, shape, device: DEVICES.includes(body.device) ? body.device : "desktop", v: project.version, resolved: false, replies: [] });
+          const el = body.el && typeof body.el === "object" ? Object.fromEntries(["sel", "tag", "text", "alt", "src", "href", "section"].map((k) => [k, str(String(body.el[k] || ""), k === "sel" || k === "src" || k === "href" ? 400 : 240)]).filter(([, v]) => v)) : null;
+          notes.push({ id: rid(8), n, by: "client", byLabel: name, at, text, shape, ...(el && Object.keys(el).length ? { el } : {}), device: DEVICES.includes(body.device) ? body.device : "desktop", v: project.version, resolved: false, replies: [] });
           project.notes = notes;
         } else if (action === "project-note-reply" || action === "project-note-del") {
           const note = (project.notes || []).find((x) => x.id === body.noteId);
