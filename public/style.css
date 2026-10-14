@@ -1110,6 +1110,6 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .agbox span{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
 .agbox b{font-family:var(--f-display);font-size:18px;line-height:1.15}
 .agbox small{font-size:12px;font-weight:700;color:var(--pink-deep)}
-.ag-stk{position:absolute;right:-6px;bottom:-4px;width:96px;height:auto;transform:rotate(5deg);filter:drop-shadow(0 4px 6px rgba(0,0,0,.18));pointer-events:none}
+.ag-stk{position:absolute;right:-4px;bottom:-6px;width:92px;height:auto;transform:rotate(4deg);filter:drop-shadow(0 4px 6px rgba(0,0,0,.18));pointer-events:none}
 .agbox:hover .ag-stk{transform:rotate(-3deg) scale(1.05);transition:transform .2s}
 @media (max-width:520px){.hero-acts{width:100%}.hero-acts>*{flex:1 1 100%}}
