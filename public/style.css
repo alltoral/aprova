@@ -1103,3 +1103,13 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .plans-a.pl-fill .pl-k-reels:not(.draft){background:#141014;color:#fbf7ee}
 .plans-a.pl-fill .pl-k-reels:not(.draft) small,.plans-a.pl-fill .pl-k-reels:not(.draft) .pl-n{color:#cfc6cc}
 .plans-a.pl-fill .pl-k-reels .pl-tags .fpill{box-shadow:0 0 0 2px #141014}
+/* hero: ações (publicados + falar com o estúdio) */
+.hero-acts{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.agbox{position:relative;display:grid;align-content:center;gap:1px;background:var(--yellow);color:#141014;text-decoration:none;border-radius:12px;padding:8px 92px 8px 14px;min-width:200px;box-shadow:0 6px 16px -8px rgba(0,0,0,.5);transition:transform .15s}
+.agbox:hover{transform:translateY(-2px) rotate(-.5deg)}
+.agbox span{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+.agbox b{font-family:var(--f-display);font-size:18px;line-height:1.15}
+.agbox small{font-size:12px;font-weight:700;color:var(--pink-deep)}
+.ag-stk{position:absolute;right:-6px;bottom:-4px;width:96px;height:auto;transform:rotate(5deg);filter:drop-shadow(0 4px 6px rgba(0,0,0,.18));pointer-events:none}
+.agbox:hover .ag-stk{transform:rotate(-3deg) scale(1.05);transition:transform .2s}
+@media (max-width:520px){.hero-acts{width:100%}.hero-acts>*{flex:1 1 100%}}
