@@ -286,7 +286,7 @@ function cleanIdea(x, prev) {
 const ideaText = (i) => [i.date, i.format, i.title, i.idea, i.caption, i.hashtags].join("|");
 function cleanPlan(body, prev, clientId) {
   const prevIdeas = new Map((prev?.ideas || []).map((i) => [i.id, i]));
-  const ideas = (Array.isArray(body.ideas) ? body.ideas : []).slice(0, 60).map((x) => {
+  const ideas = (Array.isArray(body.ideas) ? body.ideas : []).slice(0, 1000).map((x) => {
     const old = safeId(x?.id) ? prevIdeas.get(x.id) : null;
     const idea = cleanIdea(x, old);
     /* o estúdio mexeu numa ideia que o cliente pediu ajuste: volta para ele como "ajuste feito" */
@@ -656,7 +656,7 @@ ${text}
       if (a === "parse-plan" && method === "POST") {
         if (!env.AI) return json({ ideas: null });
         const body = await readBody(req);
-        const text = str(body.text, 12000);
+        const text = str(body.text, 60000);
         if (!text.trim()) return json({ ideas: null });
         const ask = `Este texto é um planejamento de conteúdo para redes sociais. Separe cada conteúdo planejado e responda SOMENTE com um array JSON válido, sem comentários.
 Cada item: { "date": "AAAA-MM-DDTHH:MM" (se houver), "format": "Post" | "Carrossel" | "Reels" | "Stories" | "Anúncio", "title": "assunto curto", "idea": "descrição da ideia ou roteiro", "caption": "legenda completa, mantendo quebras de linha", "hashtags": "" }
@@ -665,16 +665,16 @@ Texto:
 """
 ${text}
 """`;
-        for (const model of ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct"]) {
+        for (const [model, max] of [["@cf/meta/llama-3.3-70b-instruct-fp8-fast", 16000], ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", 3500], ["@cf/meta/llama-3.1-8b-instruct", 3500]]) {
           try {
-            const r = await env.AI.run(model, { messages: [{ role: "user", content: ask }], max_tokens: 3500 });
+            const r = await env.AI.run(model, { messages: [{ role: "user", content: ask }], max_tokens: max });
             const raw = r?.response ?? r;
             const t = typeof raw === "object" && raw ? JSON.stringify(raw) : String(raw || "");
             const m = t.match(/\[[\s\S]*\]/);
             if (!m) continue;
             const arr = JSON.parse(m[0]);
             if (!Array.isArray(arr) || !arr.length) continue;
-            return json({ ideas: arr.slice(0, 60).map((x) => cleanIdea(x, null)) });
+            return json({ ideas: arr.slice(0, 1000).map((x) => cleanIdea(x, null)) });
           } catch (err) { /* tenta o próximo modelo */ }
         }
         return json({ ideas: null });
@@ -917,6 +917,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           const body = await readBody(req);
           const plan = cleanPlan(body, null, b);
           if (!plan.ideas.length) return fail("Adicione pelo menos uma ideia ao planejamento");
+          if (JSON.stringify(plan).length > 1900000) return fail("Esse planejamento ficou grande demais para salvar de uma vez. Divida em dois planejamentos.");
           plan.id = rid(10);
           await db.setJSON(`plans/${b}/${plan.id}`, plan);
           if (client.planPeriod !== plan.period) { client.planPeriod = plan.period; client.updatedAt = now(); await db.setJSON(`clients/${b}`, client); }
@@ -930,6 +931,7 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
             const body = await readBody(req);
             const plan = cleanPlan(body, prev, b);
             if (!plan.ideas.length) return fail("Adicione pelo menos uma ideia ao planejamento");
+          if (JSON.stringify(plan).length > 1900000) return fail("Esse planejamento ficou grande demais para salvar de uma vez. Divida em dois planejamentos.");
             plan.doneAt = openIdeas(plan) === 0 ? prev.doneAt || now() : null;
             await db.setJSON(key, plan);
             return json({ plan });
