@@ -265,7 +265,8 @@ function askBox(e) {
     <div class="actions"><button class="btn ghost" data-act="ask-cancel">Cancelar</button><button class="btn pri" data-act="ask-send" ${S.busy ? "disabled" : ""}>${adj ? "Enviar ajuste" : "Repensar a ideia"}</button></div></div>`;
 }
 function progressBar(p, cur) {
-  return `<div class="pbar">${(p.ideas || []).map((i, k) => `<i class="${IDEA_ST[ideaSt(i)].cls}${k === cur ? " cur" : ""}"></i>`).join("")}</div>`;
+  const n = (p.ideas || []).length;
+  return `<div class="pbar ${n > 60 ? "dense" : n > 30 ? "tight" : ""}">${(p.ideas || []).map((i, k) => `<i class="${IDEA_ST[ideaSt(i)].cls}${k === cur ? " cur" : ""}"></i>`).join("")}</div>`;
 }
 function calendarHTML(p) {
   const s = toDay(p.start), en = toDay(p.end) || s; if (!s) return "";

@@ -1087,3 +1087,11 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .gv-sumbtn img{width:84px;height:60px;object-fit:cover;border-radius:10px;flex:none;background:#fff}
 .gv-sumbtn b{display:block;font-size:15px}
 .gv-sumbtn small{display:block;opacity:.75;font-size:12.5px}
+/* barra de progresso com muitas ideias (ex.: 120 stories) não estoura o card */
+.pbar{min-width:0;overflow:hidden}
+.pbar i{min-width:0}
+.pbar.tight{gap:2px}
+.pbar.dense{gap:0;border-radius:9px}
+.pbar.dense i{border-radius:0}
+.pbar.dense i.cur{box-shadow:none;background:var(--pink-deep)}
+.pl{min-width:0}
