@@ -1117,3 +1117,6 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .agbox{grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center;padding:8px 14px}
 .agbox span,.agbox b,.agbox small{grid-column:1}
 .ag-stk,.agbox:hover .ag-stk{position:static;grid-column:2;grid-row:1/4;width:58px;height:auto;transform:rotate(-5deg);filter:none}
+/* publicados à esquerda, suporte à direita (embaixo dos números) */
+.chero .hero-acts{flex:1 1 100%;justify-content:space-between}
+@media (max-width:520px){.agbox{max-width:none}}
