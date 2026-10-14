@@ -310,12 +310,24 @@ async function decideIdea(status, note) {
 }
 
 /* ======================= ESTÚDIO ======================= */
+/* do que é o planejamento: formatos e a cor do card (a do formato que domina) */
+const PLAN_FMT = { Post: ["#e55496", "#fde3ef"], Carrossel: ["#e0c400", "#fff8c7"], Reels: ["#141014", "#ece9ec"], Stories: ["#7a5af8", "#efeaff"], "Anúncio": ["#1f9d5c", "#e3f6ec"] };
+const PLAN_FMT_PL = { Post: "Posts", Carrossel: "Carrosséis", Reels: "Reels", Stories: "Stories", "Anúncio": "Anúncios" };
+function planMix(p) {
+  const c = {}; (p.ideas || []).forEach(i => { const f = PLAN_FMT[i.format] ? i.format : "Post"; c[f] = (c[f] || 0) + 1; });
+  const list = Object.entries(c).sort((a, b) => b[1] - a[1]); const tot = (p.ideas || []).length || 1;
+  const top = list[0] && list[0][1] / tot >= .7 ? list[0][0] : null;
+  const [color, tint] = top ? PLAN_FMT[top] : ["#e55496", "#fff5fa"];
+  return { list: list.slice(0, 4), key: top ? (FMT_CLS[top] || "f-post").slice(2) : "mix", color, tint };
+}
 function plansAdmin() {
   const list = S.plans || []; const c = S.client || {};
   const card = p => {
     const ideas = p.ideas || []; const cnt = st => ideas.filter(i => ideaSt(i) === st).length;
     const asks = ideas.filter(i => ["alteracao", "reprovado"].includes(ideaSt(i)));
-    return `<article class="pl ${p.visible === false ? "draft" : ""}">
+    const mix = planMix(p);
+    return `<article class="pl pl-k-${mix.key} ${p.visible === false ? "draft" : ""}" style="--plc:${mix.color};--plt:${mix.tint}">
+      <div class="pl-tags">${mix.list.map(([f, n]) => `<span class="fpill ${FMT_CLS[f] || "f-post"}">${esc(PLAN_FMT_PL[f] || f)} · ${n}</span>`).join("")}</div>
       <div class="pl-h"><span class="fpill ${p.visible === false ? "f-draft" : "f-post"}">${p.visible === false ? "Rascunho" : (PERIODS[p.period] || PERIODS.semanal).tag}</span><small>${p.visible === false ? "Só você vê" : p.seenAt ? "Visto em " + esc(fmtStamp(p.seenAt)) : "Cliente ainda não abriu"}</small></div>
       <h3>${esc(fmtRange(p.start, p.end))}</h3>
       ${progressBar(p)}
@@ -323,7 +335,7 @@ function plansAdmin() {
       ${asks.length ? `<div class="pl-asks">${asks.slice(0, 3).map(i => `<div><b>${esc(i.title)}</b>${i.review?.note ? `<p>“${esc(i.review.note)}”</p>` : `<p class="muted">${esc(IDEA_ST[ideaSt(i)].label)}</p>`}</div>`).join("")}</div>` : ""}
       <div class="rq-a"><button class="btn sm pri" data-act="plan-edit" data-id="${p.id}">Abrir e editar</button><button class="btn sm" data-act="plan-preview" data-id="${p.id}">Ver como o cliente</button>${p.visible !== false ? `<button class="btn sm" data-act="copy-link" data-link="${esc(location.origin + "/c/" + (c.token || "") + "/planejamento")}" data-msg="Link do planejamento copiado">Copiar link</button>` : ""}<button class="link ${S.armed === "pl" + p.id ? "danger" : ""}" data-act="plan-del" data-id="${p.id}">${S.armed === "pl" + p.id ? "confirmar exclusão" : "Excluir"}</button></div></article>`;
   };
-  return `<section class="reqs plans-a"><div class="section-h"><h2>Plane<em>jamento</em></h2><span class="eyebrow">${list.length ? `${list.length} ${list.length === 1 ? "planejamento" : "planejamentos"} · padrão ${esc((PERIODS[c.planPeriod] || PERIODS.semanal).tag.toLowerCase())}` : "Aprovação de ideias e legendas antes da arte"}</span></div>
+  return `<section class="reqs plans-a ${S.plFill ? "pl-fill" : ""}"><div class="section-h"><h2>Plane<em>jamento</em></h2><span class="eyebrow">${list.length ? `${list.length} ${list.length === 1 ? "planejamento" : "planejamentos"} · padrão ${esc((PERIODS[c.planPeriod] || PERIODS.semanal).tag.toLowerCase())}` : "Aprovação de ideias e legendas antes da arte"}</span></div>
     ${list.length ? `<div class="rq-list">${list.map(card).join("")}</div>` : `<div class="pl-empty"><p>Suba o planejamento da semana, quinzena ou mês. O cliente aprova as ideias e legendas antes da gente criar as artes.</p><button class="btn yel" data-act="plan-new">+ Novo planejamento</button></div>`}</section>`;
 }
 
