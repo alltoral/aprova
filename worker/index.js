@@ -247,6 +247,7 @@ function cleanClientRaw(body, prev) {
     handle,
     nicho: str(body.nicho, 80),
     nickname: typeof body.nickname === "string" ? str(body.nickname, 60).trim() : prev?.nickname || "",
+    agendaUrl: typeof body.agendaUrl === "string" ? cleanUrl(body.agendaUrl) : prev?.agendaUrl || "",
     kinds: (() => { const k = Array.isArray(body.kinds) ? [...new Set(body.kinds.filter((x) => CLIENT_KINDS.includes(x)))] : CLIENT_KINDS.includes(body.kind) ? [body.kind] : prev?.kinds || [prev?.kind || "social"]; return k.length ? k : ["social"]; })(),
     services: Array.isArray(body.services) ? [...new Set(body.services.filter((s) => SERVICES.includes(s)))] : prev?.services || [],
     color,
