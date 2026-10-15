@@ -6,6 +6,37 @@
   if (window.top === window || window.__aprovaEmbed) return;
   window.__aprovaEmbed = true;
   var parent = window.parent;
+  /* endereço do Aprova, para buscar o fotógrafo da tela (html2canvas) só quando precisar */
+  var base = (function () { try { var sc = document.currentScript || document.querySelector('script[src*="embed.js"]'); return new URL(sc.src).origin; } catch (e) { return ""; } })();
+  var h2c = null;
+  function loadH2c() {
+    if (window.html2canvas) return Promise.resolve(window.html2canvas);
+    if (h2c) return h2c;
+    h2c = new Promise(function (ok, no) { var sc = document.createElement("script"); sc.src = base + "/vendor/html2canvas.min.js"; sc.onload = function () { window.html2canvas ? ok(window.html2canvas) : no(); }; sc.onerror = function () { h2c = null; no(); }; document.head.appendChild(sc); });
+    return h2c;
+  }
+  /* foto da tela visível com o círculo do cliente desenhado por cima */
+  function snap(m) {
+    var vw = window.innerWidth, vh = window.innerHeight, sx = window.scrollX || 0, sy = window.scrollY || 0;
+    var k = Math.min(1, 1100 / vw);
+    var bg = getComputedStyle(document.body).backgroundColor;
+    if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") bg = getComputedStyle(document.documentElement).backgroundColor;
+    if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") bg = "#ffffff";
+    return loadH2c().then(function (h) {
+      return h(document.documentElement, { x: sx, y: sy, width: vw, height: vh, windowWidth: vw, windowHeight: vh, scale: k, useCORS: true, logging: false, backgroundColor: bg, imageTimeout: 4000 });
+    }).then(function (src) {
+      /* copia para uma tela limpa (a do html2canvas vem com escala e deslocamento aplicados) */
+      var cv = document.createElement("canvas"); cv.width = Math.round(vw * k); cv.height = Math.round(vh * k);
+      var c = cv.getContext("2d"); c.fillStyle = bg; c.fillRect(0, 0, cv.width, cv.height); c.drawImage(src, 0, 0, cv.width, cv.height);
+      var x = m.x * k, y = m.y * k, w = Math.max(18, m.w * k), hh = Math.max(18, m.h * k);
+      c.lineWidth = 4; c.strokeStyle = "#ffffff"; c.beginPath(); c.ellipse(x + w / 2, y + hh / 2, w / 2 + 6, hh / 2 + 6, 0, 0, Math.PI * 2); c.stroke();
+      c.lineWidth = 3.5; c.strokeStyle = "#e23b47"; c.beginPath(); c.ellipse(x + w / 2, y + hh / 2, w / 2 + 4, hh / 2 + 4, 0, 0, Math.PI * 2); c.stroke();
+      if (m.n) { c.fillStyle = "#e23b47"; c.beginPath(); c.arc(x + 2, y + 2, 13, 0, Math.PI * 2); c.fill(); c.fillStyle = "#fff"; c.font = "bold 14px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(String(m.n), x + 2, y + 3); }
+      var out = cv.toDataURL("image/jpeg", 0.72);
+      if (out.length > 520000) out = cv.toDataURL("image/jpeg", 0.5);
+      return out.length > 520000 ? null : out;
+    });
+  }
   function info(type) {
     var d = document.documentElement, b = document.body || d;
     return {
@@ -78,6 +109,14 @@
       var el = null;
       try { el = describe(document.elementFromPoint(m.x, m.y)); } catch (e) {}
       try { parent.postMessage({ aprova: "picked", id: m.id, el: el }, "*"); } catch (e) {}
+    }
+    else if (m.aprova === "snap" && typeof m.x === "number") {
+      snap(m).then(function (img) { parent.postMessage({ aprova: "snapped", id: m.id, img: img }, "*"); }, function () { parent.postMessage({ aprova: "snapped", id: m.id, img: null }, "*"); });
+    }
+    else if (m.aprova === "go" && typeof m.path === "string" && m.path.charAt(0) === "/") {
+      /* leva o site para a página onde o cliente circulou */
+      if (location.pathname + location.search + location.hash !== m.path) location.assign(m.path);
+      else send("hello");
     }
   });
   send("hello");

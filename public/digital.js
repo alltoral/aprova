@@ -161,7 +161,7 @@ function dviewSheet(sh) {
     sh.dataset.dv = key; e.helper = false; e.scroll = null;
     sh.innerHTML = dvSkeleton(p);
     const fr = sh.querySelector("#dv-if");
-    if (fr) { fr.addEventListener("load", () => { e.loaded = true; try { fr.contentWindow.postMessage({ aprova: "ping" }, "*"); } catch (x) {} dvHint(); }); e.loaded = false; setTimeout(dvHint, 6000); }
+    if (fr) { fr.addEventListener("load", () => { e.loaded = true; try { fr.contentWindow.postMessage({ aprova: "ping" }, "*"); } catch (x) {} dvHint(); setTimeout(() => { if (S.editor === e && !e.helper) dvToolbar(); }, 2500); }); e.loaded = false; setTimeout(dvHint, 6000); }
     const img = sh.querySelector("#dv-shot-img"); if (img) img.addEventListener("load", () => dvMarks());
   }
   dvHeader(); dvLayout(); dvSide(); dvMarks(); dvToolbar();
@@ -214,7 +214,7 @@ function dvHint() {
 function dvToolbar() {
   const e = S.editor, el = $("#dv-tool"), p = curProject(); if (!el || !p) return;
   const live = e.source === "live";
-  if (S.isOwner) { el.innerHTML = `<span class="dv-tip">${live ? (e.helper ? "Círculos presos na página" : "Círculos marcados na tela visível") : "Marcações nesta tela"} · só o cliente circula</span>`; return; }
+  if (S.isOwner) { el.innerHTML = live && !e.helper && e.loaded ? `<span class="dv-tip warn">Site sem o ajudante: os círculos não sabem a página nem a rolagem. Cole a linha do ajudante no site (Editar / nova versão).</span>` : `<span class="dv-tip">${live ? (e.helper ? "Círculos presos na página" : "Círculos marcados na tela visível") : "Marcações nesta tela"} · só o cliente circula</span>`; return; }
   el.innerHTML = `<div class="seg dv-mode" role="group" aria-label="Modo"><button data-act="dv-mode" data-k="0" aria-pressed="${!e.mark}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 8-6 2-2 6z"/></svg>Navegar</button><button data-act="dv-mode" data-k="1" aria-pressed="${!!e.mark}"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>Circular e comentar</button></div>
     ${e.mark ? `<span class="dv-tip">${live && !e.helper ? "Arraste para circular. Para rolar o site, volte em Navegar." : "Arraste para circular o ponto ou só toque nele."}</span>` : ""}`;
   $("#dv-ov")?.classList.toggle("marking", !!e.mark);
@@ -293,10 +293,14 @@ function dvSide() {
 }
 function noteItem(n, p) {
   const e = S.editor; const sel = n.id === e.sel;
-  const where = n.shape?.mode === "shot" ? `Tela: ${(p.shots || []).find(s => s.id === n.shape.shot)?.label || "imagem"}` : `${DEV[n.device || "desktop"].label}${n.shape?.path && n.shape.path !== "/" ? " · " + n.shape.path.slice(0, 40) : ""}`;
+  const sh = n.shape || {};
+  const where = sh.mode === "shot" ? `Tela: ${(p.shots || []).find(s => s.id === sh.shot)?.label || "imagem"}` : DEV[n.device || "desktop"].label;
+  const page = sh.mode === "doc" ? pageName(sh.path) : "";
+  const elTxt = n.el ? (n.el.text || n.el.alt || "") : "";
   const canDel = !S.isOwner && n.by === "client" && !(n.replies || []).some(r => r.by === "studio");
   return `<li class="dv-note ${n.resolved ? "done" : ""} ${sel ? "sel" : ""}" id="note-${n.id}">
-    <button class="dv-note-main" data-act="dv-note-sel" data-id="${n.id}"><span class="dv-num">${n.resolved ? "✓" : n.n}</span><span class="dv-note-t"><b>${esc(n.byLabel || "Cliente")}</b><small>${esc(fmtStamp(n.at))} · ${esc(where)}${n.v && n.v !== p.version ? ` · versão ${n.v}` : ""}</small><span class="txt">${esc(n.text)}</span></span></button>
+    <button class="dv-note-main" data-act="dv-note-sel" data-id="${n.id}"><span class="dv-num">${n.resolved ? "✓" : n.n}</span><span class="dv-note-t"><b>${esc(n.byLabel || "Cliente")}</b><small>${esc(fmtStamp(n.at))} · ${esc(where)}${n.v && n.v !== p.version ? ` · versão ${n.v}` : ""}</small><span class="txt">${esc(n.text)}</span>${page || elTxt || sh.mode === "view" ? `<span class="dv-where">${page ? `<i>Página: ${esc(page)}</i>` : ""}${elTxt ? `<i>No trecho: “${esc(elTxt.slice(0, 70))}${elTxt.length > 70 ? "…" : ""}”</i>` : ""}${sh.mode === "view" && !n.snap ? `<i class="warn">Sem página registrada (site sem o ajudante)</i>` : ""}</span>` : ""}</span></button>
+    ${n.snap ? `<button class="dv-snap" data-act="dv-zoom" data-id="${n.id}" aria-label="Ver a foto do ponto circulado"><img src="${blob(n.snap)}" alt="" loading="lazy"><span>Ver onde foi circulado</span></button>` : ""}
     ${(n.replies || []).length ? `<div class="dv-replies">${n.replies.map(r => `<div class="dv-reply ${r.by}"><b>${esc(r.by === "studio" ? "ALL TORAL" : r.byLabel || "Cliente")}</b> <small>${esc(fmtStamp(r.at))}</small><p>${esc(r.text)}</p></div>`).join("")}</div>` : ""}
     ${sel ? `<div class="dv-note-act"><textarea rows="2" data-reply="${n.id}" placeholder="Responder">${esc(e.replyDraft[n.id] || "")}</textarea><div class="actions">
       <button class="btn sm brand" data-act="dv-reply" data-id="${n.id}">Responder</button>
@@ -304,6 +308,9 @@ function noteItem(n, p) {
       ${canDel ? `<button class="link danger" data-act="dv-note-del" data-id="${n.id}">${S.armed === "nd" + n.id ? "Confirmar: apagar" : "Apagar"}</button>` : ""}</div></div>` : ""}
   </li>`;
 }
+
+function pageName(path) { const x = String(path || "/").split("#")[0].split("?")[0]; return x === "/" || x === "" || /^\/index\.html?$/.test(x) ? "Início" : x.slice(0, 50); }
+function zoomSnap(n) { if (n?.snap && typeof zoomImage === "function") zoomImage(blob(n.snap), ""); }
 
 /* desenhar o círculo */
 let drawing = null;
@@ -346,13 +353,26 @@ async function sendNote() {
   const shape = draftShape();
   S.busy = true;
   try {
-    const el = shape?.mode === "doc" ? await pickEl(e.draft.px, e.box?.s || 1) : null;
-    const r = await api(`/api/c/${S.token}/project-note`, { method: "POST", body: { projectId: p.id, text, shape, el, device: e.device, name: S.who } });
+    const nextN = (p.notes || []).reduce((m, x) => Math.max(m, x.n || 0), 0) + 1;
+    const doc = shape?.mode === "doc";
+    const sendBtn = document.querySelector('[data-act="dv-note-send"]'); if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Enviando…"; }
+    const [el, snap] = doc ? await Promise.all([pickEl(e.draft.px, e.box?.s || 1), snapEl(e.draft.px, e.box?.s || 1, nextN)]) : [null, null];
+    const r = await api(`/api/c/${S.token}/project-note`, { method: "POST", body: { projectId: p.id, text, shape, el, snap, device: e.device, name: S.who } });
     applyProject(r.project); const last = (r.project.notes || []).at(-1);
     e.draft = null; e.noteText = ""; e.sel = last?.id || null; e.filter = "open"; if (matchMedia("(max-width:760px)").matches) e.side = false;
     toast("Consideração enviada para o estúdio"); render();
-  } catch (x) { if (err) { err.hidden = false; err.textContent = x.message; } }
+  } catch (x) { if (err) { err.hidden = false; err.textContent = x.message; } const b2 = document.querySelector('[data-act="dv-note-send"]'); if (b2) { b2.disabled = false; b2.textContent = "Enviar"; } }
   S.busy = false; if (S.editor === e) { dvHeader(); dvSide(); dvMarks(); }
+}
+/* pede ao ajudante do site uma foto da tela com o círculo, para o estúdio ver exatamente o ponto */
+function snapEl(d, s, n) {
+  const fr = $("#dv-if"); if (!fr || !d) return Promise.resolve(null);
+  const id = Math.random().toString(36).slice(2);
+  return new Promise(ok => {
+    const t = setTimeout(() => { dvPicks.delete(id); ok(null); }, 9000);
+    dvPicks.set(id, v => { clearTimeout(t); dvPicks.delete(id); ok(typeof v === "string" && v.startsWith("data:image/jpeg") ? v : null); });
+    try { fr.contentWindow.postMessage({ aprova: "snap", id, n, x: d.l / s, y: d.t / s, w: d.w / s, h: d.h / s }, "*"); } catch (x) { clearTimeout(t); ok(null); }
+  });
 }
 /* pergunta ao ajudante do site qual elemento está no centro do círculo (para o PDF do estúdio) */
 const dvPicks = new Map();
@@ -382,7 +402,13 @@ function selectNote(id) {
   renderSheet();
   if (e.sel) {
     const sh = n.shape || {};
-    if (sh.mode === "doc" && e.helper) { try { $("#dv-if")?.contentWindow.postMessage({ aprova: "scrollTo", y: sh.y - 120, smooth: true }, "*"); } catch (x) {} }
+    if (sh.mode === "doc" && e.helper) {
+      const fw = $("#dv-if")?.contentWindow;
+      try {
+        if (sh.path && e.scroll?.path && sh.path !== e.scroll.path) { e.goTo = { path: sh.path, y: sh.y }; fw.postMessage({ aprova: "go", path: sh.path }, "*"); toast("Abrindo a página da marcação"); }
+        else fw.postMessage({ aprova: "scrollTo", y: sh.y - 120, smooth: true }, "*");
+      } catch (x) {}
+    } else if (sh.mode === "doc" && n.snap && !e.helper) zoomSnap(n);
     if (sh.mode === "shot") setTimeout(() => { const ov = $("#dv-ov"), sc = $("#dv-shot-scroll"); if (ov && sc) sc.scrollTo({ top: Math.max(0, sh.y * ov.clientHeight - 120), behavior: "smooth" }); }, 80);
     setTimeout(() => document.getElementById("note-" + id)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
   }
@@ -393,11 +419,14 @@ window.addEventListener("message", ev => {
   const e = S.editor; if (e?.kind !== "dview") return;
   const fr = $("#dv-if"); if (!fr || ev.source !== fr.contentWindow) return;
   const m = ev.data; if (m && m.aprova === "picked") { dvPicks.get(m.id)?.(m.el); return; }
+  if (m && m.aprova === "snapped") { dvPicks.get(m.id)?.(m.img); return; }
   if (!m || typeof m !== "object" || (m.aprova !== "hello" && m.aprova !== "scroll")) return;
   const first = !e.helper; e.helper = true; e.loaded = true;
   e.scroll = { sx: +m.sx || 0, sy: +m.sy || 0, path: String(m.path || "").slice(0, 300), dh: +m.dh || 0 };
   $("#dv-hint") && ($("#dv-hint").hidden = true);
-  if (first) dvToolbar();
+  if (first) { dvToolbar(); dvSide(); }
+  /* chegou na página da marcação escolhida: rola até ela */
+  if (e.goTo && m.aprova === "hello") { const g = e.goTo; if (!g.path || g.path === e.scroll.path) { e.goTo = null; try { fr.contentWindow.postMessage({ aprova: "scrollTo", y: g.y - 120, smooth: true }, "*"); } catch (x) {} } }
   if (!drawing) dvMarks();
 });
 /* no modo marcar, a rodinha do mouse ainda rola o site (quando o ajudante está no site) */
@@ -465,6 +494,7 @@ function digitalClick(a, b) {
     case "dv-pdf": notesPdf(); break;
     case "dv-filter": e.filter = b.dataset.k; dvSide(); dvMarks(); break;
     case "dv-note-sel": selectNote(b.dataset.id); break;
+    case "dv-zoom": { const n = (curProject()?.notes || []).find(x => x.id === b.dataset.id); zoomSnap(n); break; }
     case "dv-note-send": sendNote(); break;
     case "dv-draft-cancel": e.draft = null; e.noteText = ""; dvMarks(); break;
     case "dv-pick": { const p = curProject(); const s = b.dataset.s; if (!p || S.isOwner) break; if (projSt(p) === s && s !== "alteracao") { toast("Esse projeto já está com esse sticker"); break; }
@@ -511,6 +541,11 @@ async function shotCrop(shot, sh, n) {
   ctx.fillStyle = "#fff"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(n), (bx - cx) * k + 4, (by - cy) * k + 4);
   return { data: cv.toDataURL("image/jpeg", .85), w: cv.width, h: cv.height };
 }
+async function imgData(src) {
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+  const cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight; cv.getContext("2d").drawImage(img, 0, 0);
+  return { data: cv.toDataURL("image/jpeg", .85), w: cv.width, h: cv.height };
+}
 async function notesPdf() {
   const e = S.editor, p = curProject(); if (!p || e.pdf) return;
   e.pdf = true; dvHeader();
@@ -547,12 +582,14 @@ async function notesPdf() {
       y += 30;
       text(n.text, { size: 11.5, after: 6 });
       if (sh.mode === "doc") {
-        kv("Página", sh.path || "/");
+        kv("Página", pageName(sh.path)); kv("Endereço", p.url && sh.path ? (() => { try { return new URL(sh.path, p.url).href; } catch (x) { return ""; } })() : "");
         kv("Posição", `${Math.round(sh.x)} px da esquerda, ${Math.round(sh.y)} px do topo da página (círculo de ${Math.round(sh.w)} x ${Math.round(sh.h)} px, tela de ${sh.vw || 1280} px)`);
       } else if (sh.mode === "view") kv("Posição na tela visível", `${Math.round(sh.x * 100)}% da esquerda, ${Math.round(sh.y * 100)}% do topo (tela de ${sh.vw || 1280} px)`);
       else if (sh.mode === "shot") { const shot = (p.shots || []).find(s => s.id === sh.shot); kv("Tela", shot?.label || "Tela enviada"); }
       kv("Seção", el.section); kv("Elemento", el.sel); kv("Texto no elemento", el.text); kv("Imagem", [el.alt, el.src].filter(Boolean).join(" · ")); kv("Link", el.href);
-      if (sh.mode === "shot") {
+      if (n.snap) {
+        try { const c = await imgData(blob(n.snap)); const w = Math.min(TW, c.w * .55), h = c.h * w / c.w; need(h + 8); doc.addImage(c.data, "JPEG", M, y + 4, w, h); y += h + 12; } catch (x) { /* sem imagem */ }
+      } else if (sh.mode === "shot") {
         const shot = (p.shots || []).find(s => s.id === sh.shot);
         if (shot) try { const c = await shotCrop(shot, sh, n.n); const w = Math.min(TW, c.w * .6), h = c.h * w / c.w; need(h + 8); doc.addImage(c.data, "JPEG", M, y + 4, w, h); y += h + 12; } catch (x) { /* sem imagem */ }
       }

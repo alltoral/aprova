@@ -473,7 +473,19 @@ async function handle(req, env) {
           if (notes.length >= 300) return fail("Este projeto já tem muitas considerações. Fale com o estúdio.");
           const n = notes.reduce((m, x) => Math.max(m, x.n || 0), 0) + 1;
           const el = body.el && typeof body.el === "object" ? Object.fromEntries(["sel", "tag", "text", "alt", "src", "href", "section"].map((k) => [k, str(String(body.el[k] || ""), k === "sel" || k === "src" || k === "href" ? 400 : 240)]).filter(([, v]) => v)) : null;
-          notes.push({ id: rid(8), n, by: "client", byLabel: name, at, text, shape, ...(el && Object.keys(el).length ? { el } : {}), device: DEVICES.includes(body.device) ? body.device : "desktop", v: project.version, resolved: false, replies: [] });
+          /* foto da tela no momento do círculo (vem do ajudante do site) */
+          let snap = null;
+          const sm = typeof body.snap === "string" && /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(body.snap);
+          if (sm && sm[1].length < 560000) {
+            const bin = Uint8Array.from(atob(sm[1]), (ch) => ch.charCodeAt(0));
+            if (bin[0] === 0xff && bin[1] === 0xd8) {
+              const file = rid(20);
+              await media.set(`${client.id}/${file}/0`, bin.buffer);
+              await media.setJSON(`${client.id}/${file}`, { type: "image/jpeg", size: bin.byteLength, chunks: 1, got: 1, done: true });
+              snap = `${client.id}/${file}`;
+            }
+          }
+          notes.push({ id: rid(8), n, by: "client", byLabel: name, at, text, shape, ...(el && Object.keys(el).length ? { el } : {}), ...(snap ? { snap } : {}), device: DEVICES.includes(body.device) ? body.device : "desktop", v: project.version, resolved: false, replies: [] });
           project.notes = notes;
         } else if (action === "project-note-reply" || action === "project-note-del") {
           const note = (project.notes || []).find((x) => x.id === body.noteId);
@@ -486,6 +498,7 @@ async function handle(req, env) {
           } else {
             if (note.by !== "client" || (note.replies || []).some((r) => r.by === "studio")) return fail("Essa consideração já foi respondida pelo estúdio e não pode ser apagada.");
             project.notes = project.notes.filter((x) => x.id !== note.id);
+            if (note.snap && note.snap.startsWith(client.id + "/")) { await media.deletePrefix(note.snap + "/"); await media.delete(note.snap); }
           }
         } else return fail("Rota não encontrada", 404);
         project.updatedAt = at;
