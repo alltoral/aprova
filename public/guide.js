@@ -230,12 +230,14 @@ async function vectorizeLogo(i) {
 }
 
 /* ---------- capa do guia: mesma cor do fundo do logo, para o logo se misturar ---------- */
-const HERO_BG = new Map();
+const HERO_BG = new Map(), HERO_SOLID = new Set();
 function heroBg(m, main) {
   const fall = m.bg === "dark" ? "#141014" : m.bg === "light" ? "#ffffff" : main;
   if (HERO_BG.has(m.id)) return HERO_BG.get(m.id) || main;
   HERO_BG.set(m.id, null);
-  const apply = hex => { HERO_BG.set(m.id, hex); document.querySelectorAll(`.gv-cover[data-hero="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.style.color = swatchInk(hex); el.querySelector(".gv-hero")?.setAttribute("data-bg", hex); }); if (hex !== fall) document.querySelectorAll(`.gv-lg[data-bgof="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.querySelector("img").style.background = hex; el.dataset.bg = hex; }); };
+  const apply = (hex, solid) => { HERO_BG.set(m.id, hex); if (solid) HERO_SOLID.add(m.id);
+    /* foto de perfil: logo com fundo liso preenche o círculo inteiro */
+    document.querySelectorAll(`.ig-av[data-avof="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.classList.toggle("fill", !!solid); }); document.querySelectorAll(`.gv-cover[data-hero="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.style.color = swatchInk(hex); el.querySelector(".gv-hero")?.setAttribute("data-bg", hex); }); if (hex !== fall) document.querySelectorAll(`.gv-lg[data-bgof="${CSS.escape(m.id)}"]`).forEach(el => { el.style.background = hex; el.querySelector("img").style.background = hex; el.dataset.bg = hex; }); };
   const img = new Image();
   img.onload = () => {
     try {
@@ -248,7 +250,7 @@ function heroBg(m, main) {
       r /= k; g /= k; b /= k;
       const spread = pts.reduce((t, p) => t + Math.hypot(p[0] - r, p[1] - g, p[2] - b), 0) / k;
       if (spread > 28) return apply(fall); /* foto ou fundo com desenho: não dá para misturar */
-      apply("#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join(""));
+      apply("#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join(""), true);
     } catch (x) { /* sem leitura de pixels */ }
   };
   img.src = blob(m.id);
@@ -284,7 +286,8 @@ function guideView() {
   const hb = hero ? heroBg(hero, main) : main;
   const zoom = (m, bg, cls, inner) => `<button class="gv-z ${cls || ""}" data-act="g-zoom" data-src="${blob(m.id)}" data-bg="${esc(bg || "")}" aria-label="Ampliar">${inner || `<img src="${blob(m.id)}" alt="" loading="lazy">`}</button>`;
   const handle = c.handle || "@" + String(c.name || "marca").toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "");
-  const avatar = hero ? `<span class="ig-av" style="background:${hero.bg === "dark" ? "#141014" : hero.bg === "brand" ? esc(main) : "#fff"}"><img src="${blob(hero.id)}" alt=""></span>` : `<span class="ig-av" style="background:${esc(main)};color:${swatchInk(main)}">${esc(initials(c.name || "M"))}</span>`;
+  const avBg = HERO_BG.get(hero?.id) || (hero?.bg === "dark" ? "#141014" : hero?.bg === "brand" ? main : "#fff");
+  const avatar = hero ? `<span class="ig-av ${HERO_SOLID.has(hero.id) ? "fill" : ""}" data-avof="${esc(hero.id)}" style="background:${esc(avBg)}"><img src="${blob(hero.id)}" alt=""></span>` : `<span class="ig-av" style="background:${esc(main)};color:${swatchInk(main)}">${esc(initials(c.name || "M"))}</span>`;
   const social = (g.templates || []).length || g.bio || (g.profiles || []).length ? `<div class="gv-social">
       ${(g.templates || []).length || g.bio ? `<div class="ig"><div class="ig-top"><b>${esc(handle.replace(/^@/, ""))}</b></div>
         <div class="ig-head">${avatar}<div class="ig-n"><span><b>${(g.templates || []).length}</b>posts</span><span><b>—</b>seguidores</span><span><b>—</b>seguindo</span></div></div>
