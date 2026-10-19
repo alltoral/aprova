@@ -1,3 +1,4 @@
+import { vapid, cleanSub, saveSub, dropSub, countSubs, pushClient, queuePush, pushItemFrom } from "./push.js";
 
 
 const STATUSES = ["pendente", "aprovado", "alteracao", "reprovado", "ajustado"];
@@ -424,6 +425,9 @@ async function handle(req, env) {
       return new Response(stream, { headers: { ...base, "content-length": String(size) } });
     }
 
+    /* ---------- avisos no celular: chave pública do servidor ---------- */
+    if (parts[0] === "push" && parts[1] === "key" && method === "GET") return json({ key: (await vapid(db)).pub });
+
     /* ---------- área do cliente: só enxerga o próprio token ---------- */
     if (parts[0] === "c" && parts[1]) {
       const t = parts[1];
@@ -432,6 +436,16 @@ async function handle(req, env) {
       if (!ref) return fail("Este link não existe mais. Peça ao estúdio o link atualizado.", 404);
       const client = await db.get(`clients/${ref.clientId}`, { type: "json" });
       if (!client || client.token !== t) return fail("Este link não existe mais. Peça ao estúdio o link atualizado.", 404);
+
+      /* o celular do cliente ativa ou desativa os avisos */
+      if (method === "POST" && (parts[2] === "push-sub" || parts[2] === "push-unsub") && parts.length === 3) {
+        const body = await readBody(req);
+        const sub = cleanSub(body.subscription);
+        if (!sub) return fail("Não deu para ativar os avisos neste aparelho.");
+        if (parts[2] === "push-sub") await saveSub(db, client.id, sub, req.headers.get("user-agent"));
+        else await dropSub(db, client.id, sub.endpoint);
+        return json({ ok: true });
+      }
 
       if (method === "GET" && parts.length === 2) {
         const posts = sortPosts((await listJSON(db, `posts/${client.id}/`)).filter((p) => p.visible !== false));
@@ -825,7 +839,12 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           const plans = sortPlans(await listJSON(db, `plans/${b}/`));
           const projects = sortProjects(await listJSON(db, `projects/${b}/`));
           const guide = await db.get(`guides/${b}`, { type: "json" });
-          return json({ client, posts, requests, plans, projects, guide });
+          return json({ client, posts, requests, plans, projects, guide, pushDevices: await countSubs(db, b) });
+        }
+        /* aviso de teste no celular do cliente */
+        if (c === "push-test" && method === "POST") {
+          const r = await pushClient(db, client, { title: "Teste do Aprova", body: "Os avisos estão funcionando. Quando chegar algo para aprovar, você fica sabendo por aqui.", url: `/c/${client.token}`, tag: `aprova-${client.id}` }, url.origin);
+          return json(r);
         }
         /* ---------- guia visual (estúdio) ---------- */
         if (c === "guide") {
@@ -1110,9 +1129,23 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
-    if (url.pathname.startsWith("/api/")) return handle(req, env);
+    if (url.pathname.startsWith("/api/")) {
+      const res = await handle(req, env);
+      /* o estúdio mandou algo para o cliente: avisa no celular dele */
+      const m = /^\/api\/admin\/clients\/([^/]+)\/(posts|plans|projects|guide)(\/|$)/.exec(url.pathname);
+      if (m && res.ok && (req.method === "POST" || req.method === "PUT") && ctx?.waitUntil) {
+        try {
+          const item = pushItemFrom(m[2], await res.clone().json());
+          if (item) {
+            const db = makeStore(env.DB, "db");
+            ctx.waitUntil(db.get(`clients/${m[1]}`, { type: "json" }).then((client) => queuePush(db, client, item, url.origin)).catch(() => {}));
+          }
+        } catch { /* resposta sem JSON */ }
+      }
+      return res;
+    }
     return env.ASSETS.fetch(req);
   },
 };

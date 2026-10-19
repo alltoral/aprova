@@ -51,6 +51,7 @@ function digitalPage(c) {
     </div>`}
   </div></section>
   <main class="wrap">
+    ${typeof pushBox === "function" ? pushBox() : ""}
     ${S.isOwner ? `<div class="tools"><button class="btn pri" data-act="dp-new">+ Nova entrega</button><button class="btn yel" data-act="guide-edit">${S.guide ? "Editar guia visual" : "+ Guia visual"}</button><button class="btn" data-act="edit-client">Editar cliente</button><span class="sp"></span><button class="btn" data-act="copy-link" data-link="${esc(link)}">Copiar link do cliente</button></div>
       <div class="note-studio">Link do cliente: <code>${esc(link)}</code><br>Quem tiver esse link vê só esta página. Se precisar cortar o acesso, <button class="link ${S.armed === "token" ? "danger" : ""}" data-act="new-token">${S.armed === "token" ? "confirmar: o link antigo para de funcionar" : "gere um link novo"}</button>. Rascunhos ficam visíveis só para você.</div>`
     : `<div class="dp-how"><div><b>Como aprovar</b><ol><li>Abra o projeto e navegue como se fosse o site no ar.</li><li>Toque em <em>Circular e comentar</em>, circule o ponto e escreva o que quer mudar.</li><li>Quando estiver tudo certo, escolha o sticker de aprovado.</li></ol></div><img src="/stickers/larot/bora-aprovar.webp" alt="" width="104" class="dp-how-stk"></div>`}
