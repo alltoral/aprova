@@ -253,8 +253,31 @@ function same(a, b) {
   return d === 0;
 }
 
+
+/* signed_request da Meta: assinatura.payload em base64url, assinado com a chave secreta do app */
+const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+async function readSigned(sr, secret) {
+  const [sig, payload] = sr.split(".");
+  if (!sig || !payload || !secret) return null;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const ok = await crypto.subtle.verify("HMAC", key, b64u(sig), new TextEncoder().encode(payload));
+  if (!ok) return null;
+  try { return JSON.parse(new TextDecoder().decode(b64u(payload))); } catch { return null; }
+}
+async function forgetAccount(db, userId) {
+  const accs = await db.list({ prefix: "auto/acc/" });
+  for (const { key } of accs.blobs) {
+    const acc = await db.get(key, { type: "json" });
+    if (!acc || (String(acc.igId) !== userId && String(acc.userId || "") !== userId)) continue;
+    const clientId = key.slice("auto/acc/".length);
+    await db.delete(`auto/ig/${acc.igId}`);
+    await db.delete(key);
+    await db.deletePrefix(`auto/log/${clientId}/`);
+  }
+}
+
 /* ---------- conexão da conta ---------- */
-async function saveAccount(db, clientId, token, expiresIn) {
+async function saveAccount(db, clientId, token, expiresIn, userId) {
   const me = await igFetch(`/me?fields=user_id,username`, token);
   const igId = String(me.user_id || me.id);
   const prev = await db.get(`auto/acc/${clientId}`, { type: "json" });
@@ -262,7 +285,7 @@ async function saveAccount(db, clientId, token, expiresIn) {
   const other = await db.get(`auto/ig/${igId}`, { type: "json" });
   if (other?.clientId && other.clientId !== clientId) await db.delete(`auto/acc/${other.clientId}`);
   const acc = {
-    igId, username: me.username || "", token, tokenAt: now(), connectedAt: now(),
+    igId, userId: String(userId || me.id || ""), username: me.username || "", token, tokenAt: now(), connectedAt: now(),
     expiresAt: new Date(Date.now() + (Number(expiresIn) || 60 * 86400) * 1000).toISOString(), lastError: "",
   };
   try { await igFetch(`/me/subscribed_apps?subscribed_fields=comments,messages`, token, { method: "POST" }); }
@@ -298,6 +321,23 @@ export async function igRoute(req, env, ctx, db) {
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     return new Response("ok");
   }
+  /* a Meta avisa quando alguém remove o acesso (deauthorize) ou pede exclusão de dados */
+  if ((path === "deauth" || path === "deletion") && req.method === "POST") {
+    const form = await req.formData().catch(() => null);
+    const data = await readSigned(String(form?.get("signed_request") || ""), cfg.appSecret);
+    if (!data) return new Response("Pedido inválido", { status: 400 });
+    const userId = String(data.user_id || "");
+    await forgetAccount(db, userId);
+    if (path === "deauth") return new Response("ok");
+    const code = rid(12);
+    await db.setJSON(`auto/del/${code}`, { at: now(), status: "Dados excluídos" });
+    return json({ url: url.origin + "/exclusao-de-dados?codigo=" + code, confirmation_code: code });
+  }
+  if (path === "deletion-status" && req.method === "GET") {
+    const code = url.searchParams.get("codigo") || "";
+    const d = /^[a-z0-9]{12}$/.test(code) ? await db.get(`auto/del/${code}`, { type: "json" }) : null;
+    return d ? json(d) : fail("Pedido não encontrado", 404);
+  }
   if (path === "oauth" && req.method === "GET") {
     const back = (q) => Response.redirect(url.origin + "/automacoes?" + q, 302);
     const state = url.searchParams.get("state") || "";
@@ -312,9 +352,10 @@ export async function igRoute(req, env, ctx, db) {
       const r = await fetch("https://api.instagram.com/oauth/access_token", { method: "POST", body: form });
       const d = await r.json().catch(() => ({}));
       const short = d.access_token || d.data?.[0]?.access_token;
+      const appUserId = d.user_id || d.data?.[0]?.user_id || "";
       if (!short) throw new Error(d.error_message || d.error?.message || "O Instagram não devolveu o token");
       const ll = await longLived(cfg, short);
-      const acc = await saveAccount(db, clientId, ll.access_token, ll.expires_in);
+      const acc = await saveAccount(db, clientId, ll.access_token, ll.expires_in, appUserId);
       return back(`c=${clientId}&ok=` + encodeURIComponent("@" + acc.username));
     } catch (e) {
       return back(`c=${clientId}&erro=` + encodeURIComponent("Não deu para conectar: " + e.message));
@@ -340,7 +381,8 @@ export async function autoAdmin(req, env, db, parts, url) {
     }
     return json({
       clients: clients.sort((x, y) => x.name.localeCompare(y.name, "pt")), accounts, counts,
-      cfg: { appId: cfg.appId, hasSecret: !!cfg.appSecret, verifyToken: cfg.verifyToken, fromEnv: cfg.fromEnv, callbackUrl: url.origin + "/api/ig/webhook", redirectUri: url.origin + "/api/ig/oauth" },
+      cfg: { appId: cfg.appId, hasSecret: !!cfg.appSecret, verifyToken: cfg.verifyToken, fromEnv: cfg.fromEnv, callbackUrl: url.origin + "/api/ig/webhook", redirectUri: url.origin + "/api/ig/oauth",
+        deauthUrl: url.origin + "/api/ig/deauth", deletionUrl: url.origin + "/api/ig/deletion", privacyUrl: url.origin + "/privacidade", termsUrl: url.origin + "/termos", deletionPage: url.origin + "/exclusao-de-dados", iconUrl: url.origin + "/icons/app-meta-1024.png" },
       unknown: await readLog(db, "_", 10),
     });
   }

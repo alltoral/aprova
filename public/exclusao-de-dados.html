@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e55496">
+<title>Exclusão de dados · Aprova All Toral</title>
+<link rel="icon" href="/larot.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css?v=20261020143415">
+<style>body{margin:0}.doc{max-width:760px;margin:0 auto;padding:40px 20px 24px;line-height:1.65}.doc h1{font-family:var(--f-display);font-size:clamp(32px,6vw,48px);line-height:1.05;letter-spacing:-.02em;margin:8px 0 6px}.doc h1 em{font-style:italic;color:var(--pink);font-weight:500}.doc h2{font-family:var(--f-display);font-size:22px;margin:30px 0 6px}.doc p,.doc li{color:#2a2329}.doc .upd{color:var(--muted);font-size:14px}.doc a{color:var(--pink-deep)}.doc .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:14px}</style>
+</head>
+<body>
+<header class="bar"><div class="wrap"><div class="bar-brand"><img class="bar-larot" src="/larot.png" alt="" width="56" height="56"><div class="bar-t"><small>ALL TORAL</small><b>Aprova <em>All Toral</em></b></div></div></div></header>
+<main class="doc">
+<p class="eyebrow">Aprova All Toral</p>
+<h1>Exclusão de <em>dados</em></h1>
+<p class="upd">Atualizada em 20 de outubro de 2026</p>
+<div class="box" id="status" hidden></div>
+<p>Você pode pedir a exclusão dos seus dados de três jeitos:</p>
+<h2>1. Pelo Instagram</h2>
+<p>No Instagram, vá em <b>Configurações e privacidade → Permissões de apps e sites</b> (ou <b>Apps e sites</b>), encontre o <b>Aprova All Toral</b> e remova o acesso. Recebemos o aviso da Meta e apagamos o token e o registro de interações da conta automaticamente. Você recebe um código de confirmação para acompanhar o pedido nesta página.</p>
+<h2>2. Pelo painel do estúdio</h2>
+<p>Clientes do estúdio podem clicar em <b>Desconectar</b> na página de automações. O token é apagado na hora.</p>
+<h2>3. Por e-mail</h2>
+<p>Escreva para <a href="mailto:lucastoral@hotmail.com">lucastoral@hotmail.com</a> com o assunto <b>Exclusão de dados</b> e informe o seu nome de usuário do Instagram. Atendemos em até 15 dias e respondemos confirmando a exclusão.</p>
+<p>Responsável: <b>Lucas Toral</b>, estúdio criativo ALL TORAL, Rua Paraíba, 3376, Curitiba/PR, Brasil. Contato: <a href="mailto:lucastoral@hotmail.com">lucastoral@hotmail.com</a>.</p>
+<script>
+(async()=>{const c=new URLSearchParams(location.search).get("codigo");if(!c)return;const box=document.getElementById("status");box.hidden=false;box.textContent="Consultando o pedido "+c+"…";
+try{const r=await fetch("/api/ig/deletion-status?codigo="+encodeURIComponent(c));const d=await r.json();box.innerHTML=r.ok?"<b>Pedido "+c+":</b> "+(d.status||"concluído")+(d.at?" em "+new Date(d.at).toLocaleString("pt-BR"):""):"Não encontramos o pedido "+c+". Escreva para lucastoral@hotmail.com.";}catch(e){box.textContent="Não deu para consultar agora. Tente de novo em instantes.";}})();
+</script>
+</main>
+<footer class="foot"><div class="wrap"><img src="/logo.svg" alt="ALL TORAL" style="height:36px"><span><a href="/privacidade" style="color:inherit">Privacidade</a> · <a href="/termos" style="color:inherit">Termos</a> · <a href="/exclusao-de-dados" style="color:inherit">Exclusão de dados</a></span><span>@all.toral</span></div></footer>

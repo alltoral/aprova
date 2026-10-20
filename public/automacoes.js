@@ -229,6 +229,15 @@ function cfgView() {
       <li><div><p>Em <b>Configurar webhooks</b>, cole a <b>URL de callback</b> e o <b>Token de verificação</b> abaixo, clique em <b>Verificar e salvar</b> e ative os campos <b>comments</b> e <b>messages</b>.</p>${cp("", c.callbackUrl)}${c.verifyToken ? cp("", c.verifyToken) : `<p class="hint">O token de verificação aparece aqui depois que você salvar o ID e a chave.</p>`}</div></li>
       <li><div><p>Volte aqui, escolha o cliente e clique em <b>Conectar Instagram</b>. Depois comente a palavra num post de teste e veja a aba <b>Atividade</b>.</p></div></li>
     </ol>
+    <div class="fieldset" style="margin-top:6px"><legend>Para publicar o app</legend>
+      <p style="margin:0">Em <b>Configurações do app → Básico</b> e em <b>Configurar login comercial do Instagram</b>, preencha:</p>
+      <div><p class="hint" style="margin:0">URL da Política de Privacidade</p>${cp("", c.privacyUrl)}</div>
+      <div><p class="hint" style="margin:0">URL dos Termos de Serviço</p>${cp("", c.termsUrl)}</div>
+      <div><p class="hint" style="margin:0">URL de cancelamento de autorização (Deauthorize)</p>${cp("", c.deauthUrl)}</div>
+      <div><p class="hint" style="margin:0">URL de solicitação de exclusão de dados</p>${cp("", c.deletionUrl)}</div>
+      <div><p class="hint" style="margin:0">Ícone do app (1024 × 1024)</p><div class="au-copy"><a class="btn sm" href="${esc(c.iconUrl)}" target="_blank" rel="noopener">Abrir ícone para baixar</a></div></div>
+      <p class="hint" style="margin:0">Categoria: <b>Negócios e páginas</b>. E-mail de contato: o seu e-mail do estúdio.</p>
+    </div>
     <div class="au-note"><b>Para funcionar com qualquer seguidor</b>, o app precisa estar no modo <b>Publicado</b> com acesso avançado às permissões de mensagens e comentários, o que pede a <b>Análise do app</b> da Meta. Antes disso, as automações só respondem a contas adicionadas como testadoras no app (em <b>Funções do app</b>). Dá para testar tudo assim e pedir a análise depois.</div>
     ${c.fromEnv ? `<p class="hint">O ID e a chave estão definidos nas variáveis do Cloudflare.</p>` : `<form id="cfgForm" class="fgrid">
       <label class="field"><span>ID do app do Instagram</span><input type="text" id="cAppId" inputmode="numeric" value="${esc(c.appId || "")}" placeholder="Só números"></label>
