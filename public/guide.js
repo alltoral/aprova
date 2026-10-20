@@ -30,13 +30,15 @@ function guideBlock(c) {
   if (!g || (!S.isOwner && g.visible === false)) return "";
   loadFonts(g.fonts);
   const st = guideSt(); const logo = (g.logos || [])[0];
-  return `<section class="gb ${S.isOwner ? "" : "gb-c"}"><button class="gb-main" data-act="guide-open">
+  /* no painel do estúdio o guia ganha título próprio, para abrir e fechar como as outras seções */
+  const head = S.isOwner ? `<section class="gv-fold"><div class="section-h"><h2>Guia <em>visual</em></h2><span class="eyebrow">${g.visible === false ? "Rascunho" : `Versão ${g.version || 1} · ${esc(ST[st].label)}`}</span></div>` : "";
+  return head + `<section class="gb ${S.isOwner ? "" : "gb-c"}"><button class="gb-main" data-act="guide-open">
     <div class="gb-cover" style="background:${esc(g.colors?.[0]?.hex || c.color || "#e55496")};color:${swatchInk(g.colors?.[0]?.hex || c.color)}">${logo ? `<img src="${blob(logo.id)}" alt="">` : `<span>${esc(initials(c.name))}</span>`}</div>
     <div class="gb-t"><span class="eyebrow">${g.visible === false ? "Rascunho · só você vê" : `Guia visual · versão ${g.version || 1}`}</span><b>${S.isOwner ? esc(g.title || "Guia visual") : "Seu <em>guia visual</em>"}</b>
       <div class="gb-sw">${(g.colors || []).slice(0, 8).map(x => `<i style="background:${esc(x.hex)}" title="${esc(x.name)} ${esc(x.hex)}"></i>`).join("")}</div>
       <small>${(g.fonts || []).map(f => `<span style="${fontCss(f)}">${esc(f.name)}</span>`).join(" · ") || "Sem fontes"}</small></div>
     <span class="pill" style="background:${ST[st].color};color:${ST[st].ink}">${st === "pendente" && !S.isOwner ? "Aguardando você" : ST[st].label}</span></button>
-    ${S.isOwner ? `<div class="gb-act"><button class="btn sm" data-act="guide-edit">Editar</button><button class="btn sm ghost" data-act="guide-open">Ver como o cliente</button></div>` : ""}</section>`;
+    ${S.isOwner ? `<div class="gb-act"><button class="btn sm" data-act="guide-edit">Editar</button><button class="btn sm ghost" data-act="guide-open">Ver como o cliente</button></div>` : ""}</section>${S.isOwner ? "</section>" : ""}`;
 }
 
 /* ---------- editor do guia (estúdio) ---------- */

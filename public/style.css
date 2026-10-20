@@ -1158,3 +1158,4 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .foldable.folded>.section-h{margin-bottom:6px;padding-bottom:12px;border-bottom:1px dashed var(--line,#ecd9e3)}
 .foldable.folded>.section-h h2{opacity:.7}
 @media (prefers-reduced-motion: reduce){.section-h .sec-tg svg{transition:none}}
+.gv-fold>.section-h{margin-top:28px}
