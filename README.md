@@ -40,6 +40,16 @@ A partir daí, toda alteração enviada ao GitHub é publicada sozinha. A senha 
 
 Ele só funciona quando o site está aberto dentro do Aprova. Sem ele, o círculo fica marcado na parte do site que estava na tela.
 
+## Automações do Instagram (comentário ou story → DM)
+
+Em **`/automacoes`** (ou no botão **Automações do Instagram** do painel) cada cliente do Aprova ganha automações como as do ManyChat: a pessoa comenta uma palavra num post ou Reels, ou responde um story com ela, e recebe uma DM automática com texto e botão de link. Não há limite de automações nem de palavras.
+
+1. **Configurar app** (uma vez só): crie um app em developers.facebook.com com o caso de uso de mensagens do Instagram, cole o ID e a chave secreta do app do Instagram, e copie para o painel da Meta a URL de redirecionamento, a URL de callback e o token de verificação que a tela mostra. Ative os webhooks `comments` e `messages`.
+2. **Conectar Instagram** em cada cliente (conta profissional). O acesso vale 60 dias e é renovado sozinho todo dia às 6h14 (horário de Brasília).
+3. Crie as automações. A aba **Atividade** mostra cada comentário ou resposta que chegou e se a DM foi enviada; a aba **Testar palavra** mostra qual automação responderia, sem enviar nada.
+
+Enquanto o app da Meta não passa pela Análise do app, ele só responde a contas adicionadas como testadoras. Também dá para definir `IG_APP_ID`, `IG_APP_SECRET` e `IG_VERIFY_TOKEN` como variáveis no Cloudflare em vez de salvar pela tela.
+
 ## Guia visual (os dois tipos de cliente)
 
 Na página do cliente, **+ Guia visual**: logo e versões, cores (nome, código e uso), fontes do Google Fonts (com exemplo na fonte de verdade), elementos e aplicações, tom de voz e o que pode e não pode. O cliente abre o guia, comenta cada parte e aprova com os stickers do Larot.
@@ -63,6 +73,7 @@ O app instalado abre direto na última página usada.
 ```
 public/          páginas, estilos, stickers e ícones
 worker/index.js  servidor: senha, links dos clientes, banco e arquivos
+worker/auto.js   automações do Instagram (webhook, conexão das contas, DMs)
 wrangler.toml    configuração do Cloudflare
 ```
 

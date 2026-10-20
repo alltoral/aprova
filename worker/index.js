@@ -1,4 +1,5 @@
 import { vapid, cleanSub, saveSub, dropSub, countSubs, pushClient, queuePush, pushItemFrom } from "./push.js";
+import { igRoute, autoAdmin, refreshTokens } from "./auto.js";
 
 
 const STATUSES = ["pendente", "aprovado", "alteracao", "reprovado", "ajustado"];
@@ -639,6 +640,9 @@ async function handle(req, env) {
 
       if (a === "login") return json({ ok: true });
 
+      /* automações do Instagram (comentário ou story → DM) */
+      if (a === "auto") return await autoAdmin(req, env, db, parts.slice(2), url);
+
       /* lê um texto livre (briefing) e devolve os campos da peça */
       if (a === "parse" && method === "POST") {
         if (!env.AI) return json({ fields: null });
@@ -1141,6 +1145,16 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
+    /* avisos do Instagram e conexão das contas (públicos, sem senha) */
+    if (url.pathname.startsWith("/api/ig/")) {
+      try {
+        await setup(env.DB);
+        return await igRoute(req, env, ctx, makeStore(env.DB, "db"));
+      } catch (err) {
+        console.error(err);
+        return new Response("Erro", { status: 500 });
+      }
+    }
     if (url.pathname.startsWith("/api/")) {
       const res = await handle(req, env);
       /* o estúdio mandou algo para o cliente: avisa no celular dele */
@@ -1158,5 +1172,10 @@ export default {
       return res;
     }
     return env.ASSETS.fetch(req);
+  },
+  /* uma vez por dia: renova o acesso das contas do Instagram conectadas */
+  async scheduled(event, env, ctx) {
+    await setup(env.DB);
+    ctx.waitUntil(refreshTokens(makeStore(env.DB, "db")));
   },
 };
