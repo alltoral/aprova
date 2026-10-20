@@ -1,4 +1,4 @@
-import { meetAdmin } from "./meet.js";
+import { meetAdmin, meetCron } from "./meet.js";
 import { vapid, cleanSub, saveSub, dropSub, countSubs, pushClient, queuePush, pushItemFrom } from "./push.js";
 
 
@@ -1162,5 +1162,10 @@ export default {
       return res;
     }
     return env.ASSETS.fetch(req);
+  },
+  /* de hora em hora: transcreve áudios de reunião guardados quando a cota grátis do dia acabou */
+  async scheduled(event, env, ctx) {
+    await setup(env.DB);
+    ctx.waitUntil(meetCron(env, makeStore(env.DB, "db")).catch((e) => console.error(e)));
   },
 };

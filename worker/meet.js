@@ -14,6 +14,25 @@ const str = (v, max = 4000) => (typeof v === "string" ? v.slice(0, max) : "");
 const rid = (n = 10) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
 const safeId = (s) => typeof s === "string" && /^[a-z0-9]{4,40}$/.test(s);
 const pad = (n) => String(n).padStart(5, "0");
+/* ---------- cota grátis do dia (Workers AI: 10.000 neurons por dia, zera 00:00 UTC) ----------
+   O Aprova para antes de chegar no limite. O que passar fica guardado e é transcrito no dia seguinte. */
+const DAY_LIMIT = 8000; /* margem para as outras funções de IA do Aprova */
+const N_MIN = 46.63; /* whisper turbo, por minuto de áudio */
+const sumCost = (chars) => Math.ceil((chars / 3.2) * 0.02667 + 450);
+const today = () => new Date().toISOString().slice(0, 10);
+async function quota(db) {
+  const q = (await db.get("cfg/ai-day", { type: "json" })) || {};
+  return q.day === today() ? { day: q.day, used: q.used || 0 } : { day: today(), used: 0 };
+}
+async function spend(db, n) {
+  const q = await quota(db);
+  q.used += n;
+  await db.setJSON("cfg/ai-day", q);
+  return q;
+}
+async function canSpend(db, n) { const q = await quota(db); return q.used + n <= DAY_LIMIT; }
+const quotaInfo = (q) => ({ used: Math.round(q.used), limit: DAY_LIMIT, minutesLeft: Math.max(0, Math.floor((DAY_LIMIT - q.used - 700) / N_MIN)) });
+
 async function body(req) { try { return await req.json(); } catch { return {}; } }
 
 function b64(buf) {
@@ -101,6 +120,51 @@ ${base.slice(0, 60000)}
   return { titulo: str(o.titulo, 120).trim(), ...cleanSummary(o) };
 }
 
+async function whisper(env, db, id, seq, buf) {
+  const prev = seq > 0 ? await db.get(`meetseg/${id}/${pad(seq - 1)}`, { type: "json" }) : null;
+  const r = await env.AI.run(WHISPER, {
+    audio: b64(buf), language: "pt", vad_filter: true, condition_on_previous_text: false,
+    initial_prompt: (prev?.text ? prev.text.slice(-200) : "Reunião de trabalho em português do Brasil entre o estúdio ALL TORAL e um cliente."),
+  });
+  return clean(r?.text);
+}
+
+/* ---------- de hora em hora: transcreve o que ficou guardado e fecha as reuniões na fila ---------- */
+export async function meetCron(env, db) {
+  if (!env.AI) return;
+  const { blobs } = await db.list({ prefix: "meetaudio/" });
+  let n = 0;
+  for (const { key: k } of blobs.sort((a, b) => a.key.localeCompare(b.key))) {
+    if (n++ >= 10) return; /* poucos por rodada */
+    const [, id, sq] = k.split("/");
+    const seg = (await db.get(`meetseg/${id}/${sq}`, { type: "json" })) || { seq: +sq, s: 45 };
+    const cost = Math.ceil((seg.s || 45) / 60 * N_MIN);
+    if (!(await canSpend(db, cost))) return;
+    const buf = await db.get(k);
+    if (!buf) { await db.delete(k); continue; }
+    try {
+      const text = await whisper(env, db, id, +sq, buf);
+      await spend(db, cost);
+      await db.setJSON(`meetseg/${id}/${sq}`, { ...seg, text, pending: false, at: now() });
+      await db.delete(k);
+    } catch (e) { return; }
+  }
+  const queued = (await db.listJSON("meet/")).filter((m) => m.status === "fila");
+  for (const m of queued.slice(0, 2)) {
+    if ((await db.list({ prefix: `meetaudio/${m.id}/` })).blobs.length) continue;
+    const text = await transcript(db, m.id);
+    const cost = sumCost(Math.min(text.length, 60000));
+    if (!(await canSpend(db, cost))) return;
+    const client = m.clientId ? await db.get(`clients/${m.clientId}`, { type: "json" }) : null;
+    const s = text.trim().length < 40 ? null : await summarize(env, text, m, client?.name);
+    await spend(db, cost);
+    if (s) { if (!m.title && s.titulo) m.title = s.titulo; delete s.titulo; m.summary = s; m.error = ""; }
+    else m.error = text.trim().length < 40 ? "Quase nada foi captado." : "A IA não conseguiu montar o resumo. Tente Refazer resumo.";
+    m.status = "pronta"; m.pending = false; m.updatedAt = now();
+    await db.setJSON(`meet/${m.id}`, m);
+  }
+}
+
 /* ---------- rotas /api/admin/meet/... (já autenticadas) ---------- */
 export async function meetAdmin(req, env, db, parts, url) {
   const method = req.method;
@@ -109,7 +173,7 @@ export async function meetAdmin(req, env, db, parts, url) {
   if (!id && method === "GET") {
     const all = await db.listJSON("meet/");
     const clients = (await db.listJSON("clients/")).map((c) => ({ id: c.id, name: c.name, color: c.color || "", logoId: c.logoId || "", handle: c.handle || "" })).sort((a, b) => a.name.localeCompare(b.name));
-    return json({ meetings: all.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(meta), clients });
+    return json({ meetings: all.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map(meta), clients, quota: quotaInfo(await quota(db)) });
   }
 
   if (!id && method === "POST") {
@@ -144,6 +208,7 @@ export async function meetAdmin(req, env, db, parts, url) {
 
   if (!action && method === "DELETE") {
     await db.deletePrefix(`meetseg/${id}/`);
+    await db.deletePrefix(`meetaudio/${id}/`);
     await db.delete(key);
     return json({ ok: true });
   }
@@ -156,22 +221,30 @@ export async function meetAdmin(req, env, db, parts, url) {
     const buf = await req.arrayBuffer();
     if (!buf.byteLength) return fail("Áudio vazio");
     if (buf.byteLength > MAX_AUDIO) return fail("Parte de áudio grande demais");
-    const prev = seq > 0 ? await db.get(`meetseg/${id}/${pad(seq - 1)}`, { type: "json" }) : null;
+    const cost = Math.ceil((secs || 45) / 60 * N_MIN);
+    const bump = async () => { m.seconds = Math.max(m.seconds || 0, Math.round(Number(url.searchParams.get("t")) || 0)); m.updatedAt = now(); };
+    if (!(await canSpend(db, cost))) {
+      /* passou da cota grátis de hoje: guarda o áudio para transcrever amanhã */
+      await db.set(`meetaudio/${id}/${pad(seq)}`, buf);
+      await db.setJSON(`meetseg/${id}/${pad(seq)}`, { seq, text: "", s: secs, at: now(), pending: true });
+      m.pending = true; await bump(); await db.setJSON(key, m);
+      return json({ seq, text: "", pending: true });
+    }
     let text = "";
     try {
-      const r = await env.AI.run(WHISPER, {
-        audio: b64(buf), language: "pt", vad_filter: true, condition_on_previous_text: false,
-        initial_prompt: (prev?.text ? prev.text.slice(-200) : "Reunião de trabalho em português do Brasil entre o estúdio ALL TORAL e um cliente."),
-      });
-      text = clean(r?.text);
+      text = await whisper(env, db, id, seq, buf);
     } catch (e) {
-      return fail("Não deu para transcrever esta parte. Tentando de novo…", 502);
+      /* IA indisponível ou sem cota: guarda e o horário seguinte tenta de novo */
+      await db.set(`meetaudio/${id}/${pad(seq)}`, buf);
+      await db.setJSON(`meetseg/${id}/${pad(seq)}`, { seq, text: "", s: secs, at: now(), pending: true });
+      m.pending = true; await bump(); await db.setJSON(key, m);
+      return json({ seq, text: "", pending: true });
     }
+    await spend(db, cost);
     await db.setJSON(`meetseg/${id}/${pad(seq)}`, { seq, text, s: secs, at: now() });
     const segs = await db.list({ prefix: `meetseg/${id}/` });
     m.segs = segs.blobs.length;
-    m.seconds = Math.max(m.seconds || 0, Math.round(Number(url.searchParams.get("t")) || 0));
-    m.updatedAt = now();
+    await bump();
     await db.setJSON(key, m);
     return json({ seq, text });
   }
@@ -179,7 +252,15 @@ export async function meetAdmin(req, env, db, parts, url) {
   /* fecha a reunião: resumo, tarefas e checklist */
   if (action === "finish" && method === "POST") {
     if (!env.AI) return fail("A IA do Cloudflare não está ligada neste Aprova.", 501);
+    if ((await db.list({ prefix: `meetaudio/${id}/` })).blobs.length) {
+      m.status = "fila"; m.error = ""; m.updatedAt = now(); await db.setJSON(key, m);
+      return json({ meeting: m, quota: quotaInfo(await quota(db)) });
+    }
     const text = await transcript(db, id);
+    if (!(await canSpend(db, sumCost(Math.min(text.length, 60000))))) {
+      m.status = "fila"; m.error = ""; m.updatedAt = now(); await db.setJSON(key, m);
+      return json({ meeting: m, quota: quotaInfo(await quota(db)) });
+    }
     if (text.trim().length < 40) {
       m.status = "pronta"; m.error = "Quase nada foi captado. Confira se o microfone estava ouvindo a reunião.";
       m.summary = m.summary || cleanSummary({});
@@ -188,15 +269,16 @@ export async function meetAdmin(req, env, db, parts, url) {
     }
     const client = m.clientId ? await db.get(`clients/${m.clientId}`, { type: "json" }) : null;
     const s = await summarize(env, text, m, client?.name);
+    await spend(db, sumCost(Math.min(text.length, 60000)));
     if (!s) { m.status = "pronta"; m.error = "A IA não conseguiu montar o resumo. Tente Refazer resumo."; await db.setJSON(key, m); return json({ meeting: m }); }
     const keepDone = new Set((m.summary?.tarefas || []).filter((t) => t.feito).map((t) => t.texto));
     s.tarefas.forEach((t) => { if (keepDone.has(t.texto)) t.feito = true; });
     if (!m.title && s.titulo) m.title = s.titulo;
     delete s.titulo;
     m.summary = s;
-    m.status = "pronta"; m.error = ""; m.updatedAt = now();
+    m.status = "pronta"; m.error = ""; m.pending = false; m.updatedAt = now();
     await db.setJSON(key, m);
-    return json({ meeting: m });
+    return json({ meeting: m, quota: quotaInfo(await quota(db)) });
   }
 
   return fail("Rota não encontrada", 404);

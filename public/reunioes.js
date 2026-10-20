@@ -18,7 +18,7 @@ const RATE = 16000;
 
 const S = {
   pass: store.get("aprov_admin"), loginErr: "", ready: false, loadErr: "",
-  meetings: [], clients: [], filter: store.get("mt_filter") || "",
+  meetings: [], clients: [], quota: null, filter: store.get("mt_filter") || "",
   view: "list", cur: null, transcript: "", tab: "check", armed: null,
   rec: null, up: null, logoSvg: "",
 };
@@ -68,6 +68,7 @@ function loginView() {
 function statusPill(m) {
   if (S.rec && S.rec.id === m.id) return `<span class="mt-st rec"><i></i>Gravando</span>`;
   if (m.status === "gravando") return `<span class="mt-st warn">Interrompida</span>`;
+  if (m.status === "fila") return `<span class="mt-st warn">Na fila</span>`;
   const open = (m.summary?.tarefas || []).filter((t) => !t.feito).length;
   return `<span class="mt-st">${open ? `${open} ${open === 1 ? "tarefa aberta" : "tarefas abertas"}` : "Pronta"}</span>`;
 }
@@ -83,10 +84,16 @@ function listView() {
       <h3>${esc(m.title || "Reunião sem título")}</h3>
       <div class="meta"><span>${dt(m.createdAt)} às ${hm(m.createdAt)}</span><span>${dur(m.seconds)}</span></div>${statusPill(m)}</div></button>`;
   }).join("");
-  return `<div class="mt-head"><div><p class="eyebrow">Estúdio criativo</p><h1>Suas <em>reuniões</em></h1><p>Grave a call ou envie o áudio. O Aprova transcreve, resume e monta o checklist para mandar ao cliente.</p></div>
+  return `<div class="mt-head"><div><p class="eyebrow">Estúdio criativo</p><h1>Suas <em>reuniões</em></h1><p>Grave a call ou envie o áudio. O Aprova transcreve, resume e monta o checklist para mandar ao cliente.</p>${quotaLine()}</div>
     <div><button class="btn pri" data-act="new">+ Nova reunião</button></div></div>
     ${S.meetings.length ? `<div class="mt-filter">${chips.join("")}</div>` : ""}
     ${list.length ? `<div class="mt-grid">${cards}</div>` : `<div class="emptybox"><h3>Nenhuma reunião ainda</h3><p>Comece uma gravação na próxima call ou envie o áudio de uma reunião que já aconteceu.</p><button class="btn pri" data-act="new">+ Nova reunião</button></div>`}`;
+}
+
+function quotaLine() {
+  const q = S.quota; if (!q) return "";
+  const h = Math.floor(q.minutesLeft / 60), mi = q.minutesLeft % 60;
+  return `<p class="mt-quota">Grátis hoje: ${q.minutesLeft ? `cerca de ${h ? h + "h" + (mi ? two(mi) : "") : mi + " min"} de reunião` : "cota do dia usada. O que gravar agora é transcrito sozinho a partir das 21h"}.</p>`;
 }
 
 /* ---------- nova reunião ---------- */
@@ -235,7 +242,8 @@ async function pump(R) {
     try {
       const r = await sendPart(R.id, p.seq, p.blob, p.secs, p.t);
       R.queue.shift(); R.sent++;
-      if (r.text) R.live.push({ t: p.t - p.secs, text: r.text });
+      if (r.pending) { R.pend = (R.pend || 0) + 1; R.live.push({ t: p.t - p.secs, text: "", pending: true }); }
+      else if (r.text) R.live.push({ t: p.t - p.secs, text: r.text });
       if (S.view === "rec" && S.rec === R) render();
     } catch (e) { R.err = e.message; R.sending = false; if (S.view === "rec") render(); setTimeout(() => pump(R), 15000); return; }
   }
@@ -275,7 +283,7 @@ function recView() {
   </section>
   ${R.err ? `<div class="mt-err">${esc(R.err)} O áudio fica guardado aqui e vai de novo sozinho.</div>` : ""}
   <div class="mt-note"><b>Deixe esta tela aberta e acesa.</b> Se o aparelho bloquear ou você trocar de app no celular, a gravação para. A cada ${SEG} segundos o trecho é transcrito e aparece abaixo.</div>
-  <div class="mt-sec"><h2>Transcrição <em>ao vivo</em></h2>${R.live.length ? `<div class="mt-live">${R.live.slice().reverse().map((x) => `<p><small>${clock(x.t)}</small>${esc(x.text)}</p>`).join("")}</div>` : `<div class="emptybox" style="margin:0"><p>O primeiro trecho aparece em até ${SEG} segundos.</p></div>`}</div>`;
+  <div class="mt-sec"><h2>Transcrição <em>ao vivo</em></h2>${R.live.length ? `<div class="mt-live">${R.live.slice().reverse().map((x) => `<p><small>${clock(x.t)}</small>${x.pending ? `<span style="color:var(--muted)">Áudio guardado. A cota grátis de hoje acabou, este trecho é transcrito sozinho a partir das 21h.</span>` : esc(x.text)}</p>`).join("")}</div>` : `<div class="emptybox" style="margin:0"><p>O primeiro trecho aparece em até ${SEG} segundos.</p></div>`}</div>`;
 }
 let LOCK = null;
 async function wake(on) {
@@ -348,6 +356,7 @@ function upView() {
 async function finish(id, seconds) {
   try {
     const r = await api(`/api/admin/meet/${id}/finish`, { method: "POST" });
+    if (r.quota) S.quota = r.quota;
     replace(r.meeting);
     await openMeet(id, "check");
   } catch (e) { toast(e.message); S.view = "list"; render(); }
@@ -357,7 +366,7 @@ async function openMeet(id, tab) {
   try {
     const r = await api(`/api/admin/meet/${id}`);
     S.cur = r.meeting; S.transcript = r.transcript; replace(r.meeting);
-    S.view = "meet"; S.tab = tab || (S.cur.status === "gravando" ? "trans" : "check"); S.armed = null;
+    S.view = "meet"; S.tab = tab || (S.cur.status === "gravando" || S.cur.status === "fila" ? "trans" : "check"); S.armed = null;
     render(); scrollTo(0, 0);
   } catch (e) { toast(e.message); }
 }
@@ -381,6 +390,7 @@ function meetView() {
     <div style="display:flex;align-items:center;gap:10px;margin-top:6px">${av(c, "lg")}<select id="mClient" style="width:auto;border-radius:999px" aria-label="Cliente">${opts}</select></div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="redo">Refazer resumo</button><button class="btn danger ${S.armed === "del" ? "armed" : ""}" data-act="del">${S.armed === "del" ? "Confirmar exclusão" : "Apagar"}</button></div></div>
   ${m.status === "gravando" ? `<div class="mt-err">Esta gravação foi interrompida antes de terminar. O que foi captado está na transcrição. Use <b>Refazer resumo</b> para gerar o checklist com ele.</div>` : ""}
+  ${m.status === "fila" ? `<div class="mt-err" style="background:#fffbd6;border-color:#f1e27a">A cota grátis de IA de hoje acabou. O áudio está guardado e o Aprova termina a transcrição e o checklist sozinho a partir das 21h (horário de Brasília). Nada é cobrado.</div>` : ""}
   ${m.error ? `<div class="mt-err">${esc(m.error)}</div>` : ""}
   <div class="mt-tabs" role="tablist">${tab("check", "Checklist")}${tab("sum", "Resumo")}${tab("trans", "Transcrição")}</div>`;
   if (S.tab === "sum") html += sumView(s);
@@ -492,7 +502,7 @@ document.addEventListener("click", async (ev) => {
     case "tadd": { const nid = "t" + Date.now().toString(36); sm().tarefas.push({ id: nid, texto: "Nova tarefa", quem: "ALL TORAL", prazo: "", feito: false }); saveSoon(); render(); fitPreview(); const n = document.querySelector(`.tx[data-id="${nid}"]`); n?.focus(); n?.select(); break; }
     case "redo": {
       el.disabled = true; el.textContent = "Lendo a reunião…";
-      try { const r = await api(`/api/admin/meet/${S.cur.id}/finish`, { method: "POST" }); replace(r.meeting); S.cur = r.meeting; toast("Resumo refeito"); } catch (e) { toast(e.message); }
+      try { const r = await api(`/api/admin/meet/${S.cur.id}/finish`, { method: "POST" }); if (r.quota) S.quota = r.quota; replace(r.meeting); S.cur = r.meeting; toast(r.meeting.status === "fila" ? "Cota grátis de hoje usada. Fica pronto a partir das 21h." : "Resumo refeito"); } catch (e) { toast(e.message); }
       render(); fitPreview(); break;
     }
     case "del":
@@ -547,7 +557,7 @@ async function load() {
   S.ready = false; S.loadErr = ""; render();
   try {
     const [r, logo] = await Promise.all([api("/api/admin/meet"), fetch("/logo.svg").then((x) => x.text()).catch(() => "")]);
-    S.meetings = r.meetings; S.clients = r.clients;
+    S.meetings = r.meetings; S.clients = r.clients; S.quota = r.quota || null;
     S.logoSvg = logo.replace(/<\?xml[\s\S]*?\?>/, "").replace(/<!DOCTYPE[\s\S]*?>/, "").replace(/viewBox="[^"]*"/, 'viewBox="364 156 1272 1690"').replace(/width="100%" height="100%"/, "");
     S.ready = true;
     if (S.filter && !S.clients.some((c) => c.id === S.filter)) S.filter = "";

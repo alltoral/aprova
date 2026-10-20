@@ -23,3 +23,7 @@ binding = "AI"
 
 [observability]
 enabled = true
+
+# Reuniões: transcreve de hora em hora o áudio que passou da cota grátis do dia
+[triggers]
+crons = ["7 * * * *"]
