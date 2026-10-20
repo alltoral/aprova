@@ -21,9 +21,5 @@ database_id = "ba61bdb2-7a09-40c9-80fb-5e956d996b61"
 [ai]
 binding = "AI"
 
-# Renova todo dia o acesso das contas do Instagram (automações)
-[triggers]
-crons = ["17 9 * * *"]
-
 [observability]
 enabled = true
