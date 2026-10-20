@@ -37,6 +37,9 @@ async function api(path, opts = {}) {
   return data;
 }
 const client = (id) => S.clients.find((c) => c.id === id);
+const isLead = (m) => !client(m?.clientId);
+const nameOf = (m) => client(m?.clientId)?.name || m?.lead || "";
+const leadAv = (cls = "") => `<span class="mt-av ${cls} lead">L</span>`;
 const av = (c, cls = "") => `<span class="mt-av ${cls}" style="background:${esc(c?.color || "#fff")}">${c?.logoId ? `<img src="/api/media/${esc(c.logoId)}" alt="">` : esc(initials(c?.name || "?"))}</span>`;
 
 /* ---------- moldura ---------- */
@@ -75,12 +78,13 @@ function statusPill(m) {
 function listView() {
   const used = new Set(S.meetings.map((m) => m.clientId));
   const chips = [`<button class="mt-chip plain" data-act="filter" data-id="" aria-pressed="${!S.filter}">Todas</button>`]
-    .concat(S.clients.filter((c) => used.has(c.id)).map((c) => `<button class="mt-chip" data-act="filter" data-id="${c.id}" aria-pressed="${S.filter === c.id}">${av(c)}${esc(c.name)}</button>`));
-  const list = S.meetings.filter((m) => !S.filter || m.clientId === S.filter);
+    .concat(S.clients.filter((c) => used.has(c.id)).map((c) => `<button class="mt-chip" data-act="filter" data-id="${c.id}" aria-pressed="${S.filter === c.id}">${av(c)}${esc(c.name)}</button>`))
+    .concat(S.meetings.some(isLead) ? [`<button class="mt-chip lead" data-act="filter" data-id="lead" aria-pressed="${S.filter === "lead"}">${leadAv()}Leads</button>`] : []);
+  const list = S.meetings.filter((m) => !S.filter || (S.filter === "lead" ? isLead(m) : m.clientId === S.filter));
   const cards = list.map((m) => {
     const c = client(m.clientId);
-    return `<button class="mt-card" data-act="open" data-id="${m.id}"><div class="sw" style="background:${esc(c?.color || "var(--pink)")}"></div><div class="bd">
-      <div class="who">${av(c)}<span>${esc(c?.name || "Sem cliente")}</span></div>
+    return `<button class="mt-card ${c ? "" : "lead"}" data-act="open" data-id="${m.id}"><div class="sw" style="${c ? `background:${esc(c.color || "var(--pink)")}` : ""}"></div><div class="bd">
+      <div class="who">${c ? av(c) : leadAv()}<span>${c ? esc(c.name) : `Lead${m.lead ? " · " + esc(m.lead) : ""}`}</span></div>
       <h3>${esc(m.title || "Reunião sem título")}</h3>
       <div class="meta"><span>${dt(m.createdAt)} às ${hm(m.createdAt)}</span><span>${dur(m.seconds)}</span></div>${statusPill(m)}</div></button>`;
   }).join("");
@@ -100,17 +104,18 @@ function quotaLine() {
 const canTab = () => !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 let NEW = null;
 function openNew() {
-  NEW = { clientId: S.filter || "", title: "", link: "", mode: "rec", tab: false, file: null };
+  NEW = { clientId: S.filter && S.filter !== "lead" ? S.filter : "", lead: "", title: "", link: "", mode: "rec", tab: false, file: null };
   renderNew();
 }
 function renderNew() {
   const sh = $("#sheet");
-  const opts = `<option value="">Sem cliente</option>` + S.clients.map((c) => `<option value="${c.id}" ${NEW.clientId === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+  const opts = `<option value="">Lead (não é cliente)</option>` + S.clients.map((c) => `<option value="${c.id}" ${NEW.clientId === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
   sh.innerHTML = `<div class="panel" style="max-width:640px" role="dialog" aria-modal="true" aria-labelledby="nt"><div class="panel-h"><div class="t"><p class="eyebrow">Nova reunião</p><h2 id="nt">Como vai ser a captação?</h2></div><button class="x" data-act="close" aria-label="Fechar">×</button></div>
   <form class="form" id="newForm">
     <div class="fgrid">
       <label class="field"><span>Cliente</span><select id="nClient">${opts}</select></label>
-      <label class="field"><span>Assunto (opcional)</span><input type="text" id="nTitle" maxlength="120" placeholder="A IA sugere se ficar vazio" value="${esc(NEW.title)}"></label>
+      ${NEW.clientId ? "" : `<label class="field"><span>Nome do lead</span><input type="text" id="nLead" maxlength="80" placeholder="Ex.: Clínica Sorriso" value="${esc(NEW.lead)}"></label>`}
+      <label class="field ${NEW.clientId ? "" : "full"}"><span>Assunto (opcional)</span><input type="text" id="nTitle" maxlength="120" placeholder="A IA sugere se ficar vazio" value="${esc(NEW.title)}"></label>
       <label class="field full"><span>Link do Meet (opcional)</span><input type="url" id="nLink" placeholder="https://meet.google.com/abc-defg-hij" value="${esc(NEW.link)}"></label>
     </div>
     <div class="mt-pick">
@@ -131,6 +136,7 @@ function closeSheet() { $("#sheet").hidden = true; $("#sheet").innerHTML = ""; d
 function readNew() {
   NEW.clientId = $("#nClient")?.value || "";
   NEW.title = $("#nTitle")?.value.trim() || "";
+  NEW.lead = NEW.clientId ? "" : ($("#nLead")?.value.trim() ?? NEW.lead ?? "");
   NEW.link = $("#nLink")?.value.trim() || "";
   NEW.tab = !!$("#nTab")?.checked;
   NEW.file = $("#nFile")?.files?.[0] || null;
@@ -184,7 +190,7 @@ async function startRec() {
     return;
   }
   let meeting;
-  try { meeting = (await api("/api/admin/meet", { method: "POST", body: { clientId: NEW.clientId, title: NEW.title, link: NEW.link, source: "gravacao" } })).meeting; }
+  try { meeting = (await api("/api/admin/meet", { method: "POST", body: { clientId: NEW.clientId, lead: NEW.lead, title: NEW.title, link: NEW.link, source: "gravacao" } })).meeting; }
   catch (e) { R.streams.forEach((s) => s.getTracks().forEach((t) => t.stop())); toast(e.message); return; }
   S.meetings.unshift(meeting);
   R.id = meeting.id;
@@ -270,7 +276,7 @@ function recView() {
   const m = S.meetings.find((x) => x.id === R.id);
   const c = client(m?.clientId);
   const wait = R.queue.length;
-  return `<div class="mt-head"><div><p class="eyebrow">${esc(c?.name || "Reunião")}</p><h1>${R.stopping ? "Montando o <em>resumo</em>" : "Gravando a <em>reunião</em>"}</h1></div></div>
+  return `<div class="mt-head"><div><p class="eyebrow">${esc(nameOf(m) || "Reunião")}</p><h1>${R.stopping ? "Montando o <em>resumo</em>" : "Gravando a <em>reunião</em>"}</h1></div></div>
   <section class="mt-rec" aria-live="polite">
     <p class="eyebrow"><span class="mt-dot ${R.paused || R.stopping ? "off" : ""}"></span>${R.stopping ? "Finalizando" : R.paused ? "Pausado" : "Gravando"}</p>
     <div class="mt-time" id="recTime">${clock(R.elapsed)}</div>
@@ -317,7 +323,7 @@ async function startUpload() {
     S.up.err = "Não deu para ler este arquivo neste navegador. Tente exportar como m4a ou mp3."; render(); return;
   }
   let meeting;
-  try { meeting = (await api("/api/admin/meet", { method: "POST", body: { clientId: NEW.clientId, title: NEW.title, link: NEW.link, source: "arquivo" } })).meeting; S.meetings.unshift(meeting); }
+  try { meeting = (await api("/api/admin/meet", { method: "POST", body: { clientId: NEW.clientId, lead: NEW.lead, title: NEW.title, link: NEW.link, source: "arquivo" } })).meeting; S.meetings.unshift(meeting); }
   catch (e) { S.up.err = e.message; render(); return; }
   const parts = [];
   for (let i = 0, seq = 0; i < samples.length; i += RATE * SEG) {
@@ -375,19 +381,19 @@ function saveSoon() {
   clearTimeout(saveT);
   saveT = setTimeout(async () => {
     const m = S.cur; if (!m) return;
-    try { const r = await api(`/api/admin/meet/${m.id}`, { method: "PUT", body: { title: m.title, clientId: m.clientId, summary: m.summary } }); replace({ ...r.meeting }); } catch (e) { toast(e.message); }
+    try { const r = await api(`/api/admin/meet/${m.id}`, { method: "PUT", body: { title: m.title, clientId: m.clientId, lead: m.lead || "", summary: m.summary } }); replace({ ...r.meeting }); } catch (e) { toast(e.message); }
   }, 600);
 }
 const sm = () => (S.cur.summary ||= { resumo: "", pontos: [], decisoes: [], tarefas: [], proxima: "" });
 
 function meetView() {
   const m = S.cur, c = client(m.clientId), s = m.summary;
-  const opts = `<option value="">Sem cliente</option>` + S.clients.map((x) => `<option value="${x.id}" ${m.clientId === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+  const opts = `<option value="" ${c ? "" : "selected"}>Lead (não é cliente)</option>` + S.clients.map((x) => `<option value="${x.id}" ${m.clientId === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
   const tab = (k, l) => `<button class="mt-tab" role="tab" aria-selected="${S.tab === k}" data-act="tab" data-k="${k}">${l}</button>`;
   let html = `<div><button class="mt-back" data-act="home">← Todas as reuniões</button></div>
   <div class="mt-head"><div style="min-width:0;flex:1 1 360px"><p class="eyebrow">${dt(m.createdAt)} às ${hm(m.createdAt)} · ${dur(m.seconds)}</p>
     <input type="text" id="mTitle" value="${esc(m.title)}" placeholder="Reunião sem título" aria-label="Assunto da reunião" style="font-family:var(--f-display);font-size:clamp(28px,5vw,46px);font-weight:700;letter-spacing:-.02em;border:0;padding:4px 0;background:transparent;box-shadow:none">
-    <div style="display:flex;align-items:center;gap:10px;margin-top:6px">${av(c, "lg")}<select id="mClient" style="width:auto;border-radius:999px" aria-label="Cliente">${opts}</select></div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">${c ? av(c, "lg") : leadAv("lg")}<select id="mClient" style="width:auto;border-radius:999px" aria-label="Cliente">${opts}</select>${c ? "" : `<input type="text" id="mLead" value="${esc(m.lead || "")}" placeholder="Nome do lead" maxlength="80" aria-label="Nome do lead" style="width:220px;border-radius:999px">`}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="redo">Refazer resumo</button><button class="btn danger ${S.armed === "del" ? "armed" : ""}" data-act="del">${S.armed === "del" ? "Confirmar exclusão" : "Apagar"}</button></div></div>
   ${m.status === "gravando" ? `<div class="mt-err">Esta gravação foi interrompida antes de terminar. O que foi captado está na transcrição. Use <b>Refazer resumo</b> para gerar o checklist com ele.</div>` : ""}
   ${m.status === "fila" ? `<div class="mt-err" style="background:#fffbd6;border-color:#f1e27a">A cota grátis de IA de hoje acabou. O áudio está guardado e o Aprova termina a transcrição e o checklist sozinho a partir das 21h (horário de Brasília). Nada é cobrado.</div>` : ""}
@@ -419,7 +425,7 @@ function taskRow(t) {
 function checkView(m) {
   const ts = sm().tarefas;
   const g = (q, label) => { const list = ts.filter((t) => t.quem === q); return list.length ? `<p class="mt-glabel">${label}</p>${list.map(taskRow).join("")}` : ""; };
-  const cname = client(m.clientId)?.name || "Cliente";
+  const cname = nameOf(m) || (isLead(m) ? "o lead" : "Cliente");
   return `<div class="mt-cols"><div class="mt-sec"><h2>Tarefas <em>combinadas</em></h2><p style="color:var(--muted);font-size:14px">Ajuste o texto, quem faz e o prazo. Tudo salva sozinho e aparece no checklist ao lado.</p>
     <div class="mt-tasks">${ts.length ? g("ALL TORAL", "Com a ALL TORAL") + g("Cliente", "Com " + esc(cname)) + g("Ambos", "Juntos") : `<div class="emptybox" style="margin:0"><p>Nenhuma tarefa encontrada nesta reunião.</p></div>`}</div>
     <div><button class="btn sm" data-act="tadd">+ Adicionar tarefa</button></div></div>
@@ -431,12 +437,13 @@ function checkView(m) {
 /* ---------- peça do checklist ---------- */
 function cardHTML(m, scale) {
   const s = m.summary || {}, ts = s.tarefas || [];
-  const cname = client(m.clientId)?.name || "";
+  const cname = nameOf(m);
+  const lead = isLead(m);
   const item = (t) => `<div class="ck-i ${t.feito ? "done" : ""}"><div class="b">${t.feito ? CHECK : ""}</div><div><div class="t">${esc(t.texto)}</div>${t.prazo ? `<span class="p">${esc(t.prazo)}</span>` : ""}</div></div>`;
   const grp = (q, l, cls) => { const list = ts.filter((t) => t.quem === q); return list.length ? `<div class="ck-g ${cls}"><h2>${esc(l)}</h2>${list.map(item).join("")}</div>` : ""; };
   const d = new Date(m.createdAt);
-  const inner = `<div class="ck-card"><div class="ck-top">${S.logoSvg}<div class="r"><small>Checklist</small><b>${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}</b></div></div>
-    <div class="ck-body"><div class="ck-h"><small>${esc(cname || "Reunião")}</small><h1>Próximos <em>passos</em></h1>${m.title ? `<p>${esc(m.title)}</p>` : ""}</div>
+  const inner = `<div class="ck-card ${lead ? "dark" : ""}"><div class="ck-top">${S.logoSvg}<div class="r"><small>Checklist</small><b>${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()}</b></div></div>
+    <div class="ck-body"><div class="ck-h"><small>${esc(cname || (lead ? "Lead" : "Reunião"))}</small><h1>Próximos <em>passos</em></h1>${m.title ? `<p>${esc(m.title)}</p>` : ""}</div>
     ${grp("ALL TORAL", "Com a ALL TORAL", "") || ""}${grp("Cliente", cname ? "Com " + cname : "Com você", "cli")}${grp("Ambos", "Juntos", "")}
     ${!ts.length ? `<p style="font-size:26px;color:#6c6270">Nenhuma tarefa por enquanto.</p>` : ""}
     ${s.proxima ? `<div class="ck-next"><b>Próxima reunião:</b> ${esc(s.proxima)}</div>` : ""}</div>
@@ -468,12 +475,12 @@ async function renderPNG() {
   return await new Promise((ok) => canvas.toBlob(ok, "image/png"));
 }
 function fileName() {
-  const m = S.cur, c = client(m.clientId);
+  const m = S.cur;
   const d = new Date(m.createdAt);
-  return `checklist-${(c?.name || "reuniao").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${two(d.getDate())}-${two(d.getMonth() + 1)}.png`;
+  return `checklist-${(nameOf(m) || "reuniao").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${two(d.getDate())}-${two(d.getMonth() + 1)}.png`;
 }
 function checkText() {
-  const m = S.cur, s = m.summary || {}, ts = s.tarefas || [], cname = client(m.clientId)?.name || "você";
+  const m = S.cur, s = m.summary || {}, ts = s.tarefas || [], cname = nameOf(m) || "você";
   const d = new Date(m.createdAt);
   const g = (q, l) => { const list = ts.filter((t) => t.quem === q); return list.length ? `\n*${l}*\n` + list.map((t) => `${t.feito ? "✅" : "▢"} ${t.texto}${t.prazo ? ` (${t.prazo})` : ""}`).join("\n") + "\n" : ""; };
   return `*Checklist da reunião ${two(d.getDate())}/${two(d.getMonth() + 1)}*${m.title ? `\n${m.title}` : ""}\n${g("ALL TORAL", "Com a ALL TORAL")}${g("Cliente", "Com " + cname)}${g("Ambos", "Juntos")}${s.proxima ? `\n*Próxima reunião:* ${s.proxima}` : ""}`.trim();
@@ -532,6 +539,7 @@ document.addEventListener("input", (ev) => {
   const t = ev.target;
   if (!S.cur) return;
   if (t.id === "mTitle") { S.cur.title = t.value; saveSoon(); return; }
+  if (t.id === "mLead") { S.cur.lead = t.value; saveSoon(); refreshPrev(); return; }
   if (t.id === "sResumo") { sm().resumo = t.value; saveSoon(); return; }
   if (t.id === "sProx") { sm().proxima = t.value; saveSoon(); refreshPrev(); return; }
   if (t.dataset.f && t.dataset.id) {
@@ -543,6 +551,7 @@ document.addEventListener("input", (ev) => {
 });
 document.addEventListener("change", (ev) => {
   const t = ev.target;
+  if (t.id === "nClient") { readNew(); renderNew(); return; }
   if (t.id === "mClient" && S.cur) { S.cur.clientId = t.value; saveSoon(); render(); fitPreview(); }
   if (t.dataset.f === "quem" && S.cur) { render(); fitPreview(); }
 });
@@ -560,7 +569,7 @@ async function load() {
     S.meetings = r.meetings; S.clients = r.clients; S.quota = r.quota || null;
     S.logoSvg = logo.replace(/<\?xml[\s\S]*?\?>/, "").replace(/<!DOCTYPE[\s\S]*?>/, "").replace(/viewBox="[^"]*"/, 'viewBox="364 156 1272 1690"').replace(/width="100%" height="100%"/, "");
     S.ready = true;
-    if (S.filter && !S.clients.some((c) => c.id === S.filter)) S.filter = "";
+    if (S.filter && S.filter !== "lead" && !S.clients.some((c) => c.id === S.filter)) S.filter = "";
     const q = new URLSearchParams(location.search).get("r");
     if (q && S.meetings.some((m) => m.id === q)) return openMeet(q);
     render();

@@ -156,7 +156,7 @@ export async function meetCron(env, db) {
     const cost = sumCost(Math.min(text.length, 60000));
     if (!(await canSpend(db, cost))) return;
     const client = m.clientId ? await db.get(`clients/${m.clientId}`, { type: "json" }) : null;
-    const s = text.trim().length < 40 ? null : await summarize(env, text, m, client?.name);
+    const s = text.trim().length < 40 ? null : await summarize(env, text, m, client?.name || m.lead);
     await spend(db, cost);
     if (s) { if (!m.title && s.titulo) m.title = s.titulo; delete s.titulo; m.summary = s; m.error = ""; }
     else m.error = text.trim().length < 40 ? "Quase nada foi captado." : "A IA não conseguiu montar o resumo. Tente Refazer resumo.";
@@ -179,7 +179,7 @@ export async function meetAdmin(req, env, db, parts, url) {
   if (!id && method === "POST") {
     const b = await body(req);
     const clientId = safeId(b.clientId) ? b.clientId : "";
-    const m = { id: rid(10), clientId, title: str(b.title, 120).trim(), link: str(b.link, 300).trim(), source: b.source === "arquivo" ? "arquivo" : "gravacao", status: "gravando", segs: 0, seconds: 0, createdAt: now(), updatedAt: now(), summary: null, error: "" };
+    const m = { id: rid(10), clientId, lead: clientId ? "" : str(b.lead, 80).trim(), title: str(b.title, 120).trim(), link: str(b.link, 300).trim(), source: b.source === "arquivo" ? "arquivo" : "gravacao", status: "gravando", segs: 0, seconds: 0, createdAt: now(), updatedAt: now(), summary: null, error: "" };
     await db.setJSON(`meet/${m.id}`, m);
     return json({ meeting: m });
   }
@@ -195,6 +195,7 @@ export async function meetAdmin(req, env, db, parts, url) {
     const b = await body(req);
     if (typeof b.title === "string") m.title = str(b.title, 120).trim();
     if (typeof b.clientId === "string") m.clientId = safeId(b.clientId) ? b.clientId : "";
+    if (typeof b.lead === "string") m.lead = str(b.lead, 80).trim();
     if (typeof b.link === "string") m.link = str(b.link, 300).trim();
     if (b.summary && typeof b.summary === "object") m.summary = { ...(m.summary || {}), ...cleanSummary({ ...(m.summary || {}), ...b.summary }) };
     if (typeof b.transcript === "string") {
@@ -268,7 +269,7 @@ export async function meetAdmin(req, env, db, parts, url) {
       return json({ meeting: m });
     }
     const client = m.clientId ? await db.get(`clients/${m.clientId}`, { type: "json" }) : null;
-    const s = await summarize(env, text, m, client?.name);
+    const s = await summarize(env, text, m, client?.name || m.lead);
     await spend(db, sumCost(Math.min(text.length, 60000)));
     if (!s) { m.status = "pronta"; m.error = "A IA não conseguiu montar o resumo. Tente Refazer resumo."; await db.setJSON(key, m); return json({ meeting: m }); }
     const keepDone = new Set((m.summary?.tarefas || []).filter((t) => t.feito).map((t) => t.texto));

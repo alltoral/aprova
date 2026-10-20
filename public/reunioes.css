@@ -123,3 +123,29 @@
 .ck-next b{font-weight:700}
 .ck-foot{background:#141014;color:#e55496;padding:30px 72px;display:flex;justify-content:space-between;font-size:20px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin-top:auto}
 .mt-quota{font-size:13px!important;color:var(--pink-deep)!important;font-weight:600;margin-top:8px!important}
+
+/* leads: versão escura, preto com amarelo */
+.mt-av.lead{background:#141014;color:#fae204}
+.mt-chip.lead[aria-pressed="true"]{background:#141014;border-color:#141014;color:#fae204}
+.mt-card.lead{background:#141014;border-color:#141014;color:#fff}
+.mt-card.lead .sw{background:#fae204}
+.mt-card.lead .who{color:#fae204}
+.mt-card.lead .meta{color:#c9bfcb}
+.mt-card.lead .mt-av.lead{box-shadow:0 0 0 1px #fae204}
+.mt-card.lead .mt-st{background:#fae204;color:#141014}
+.mt-card.lead:hover{border-color:#fae204}
+.ck-card.dark{background:#141014;color:#fff}
+.ck-card.dark .ck-top{background:#fae204}
+.ck-card.dark .ck-h small{color:#fae204}
+.ck-card.dark .ck-h h1 em{color:#fae204}
+.ck-card.dark .ck-h p{color:#c9bfcb}
+.ck-card.dark .ck-g h2{background:#fae204;color:#141014}
+.ck-card.dark .ck-g.cli h2{background:#fff;color:#141014}
+.ck-card.dark .ck-i{background:#221b23;border-color:#3a2f3b}
+.ck-card.dark .ck-i .b{border-color:#fae204;background:transparent}
+.ck-card.dark .ck-i.done .b{background:#fae204}
+.ck-card.dark .ck-i .b svg{stroke:#141014}
+.ck-card.dark .ck-i.done .t{color:#8a7f8c}
+.ck-card.dark .ck-i .p{background:#fae204;color:#141014}
+.ck-card.dark .ck-next{background:#fae204;color:#141014}
+.ck-card.dark .ck-foot{background:#fae204;color:#141014}
