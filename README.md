@@ -44,6 +44,14 @@ Ele só funciona quando o site está aberto dentro do Aprova. Sem ele, o círcul
 
 Na página do cliente, **+ Guia visual**: logo e versões, cores (nome, código e uso), fontes do Google Fonts (com exemplo na fonte de verdade), elementos e aplicações, tom de voz e o que pode e não pode. O cliente abre o guia, comenta cada parte e aprova com os stickers do Larot.
 
+## Reuniões
+
+Em **`/reunioes`** (ou no botão **Reuniões** do painel) o estúdio grava a call ou envia o áudio de uma reunião. O Aprova transcreve em partes de 45 segundos com a IA do Cloudflare (Whisper), e no fim monta o resumo, as decisões e as tarefas (ALL TORAL, cliente ou juntos). As tarefas viram o checklist na identidade do ALL TORAL, que sai em PNG ou em texto para o WhatsApp.
+
+- Gravar: usa o microfone do aparelho. No computador, em Chrome ou Edge, dá para captar também o som da aba do Meet.
+- Enviar arquivo: áudio ou vídeo de qualquer app (m4a, mp3, mp4, wav, webm).
+- Nenhum bot entra na reunião. A captação é feita no aparelho de quem grava.
+
 ## Limites
 
 - Arquivos de até 200 MB (vídeos são enviados em partes). Imagens grandes são reduzidas antes do envio.

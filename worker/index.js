@@ -1,3 +1,4 @@
+import { meetAdmin } from "./meet.js";
 import { vapid, cleanSub, saveSub, dropSub, countSubs, pushClient, queuePush, pushItemFrom } from "./push.js";
 
 
@@ -638,6 +639,9 @@ async function handle(req, env) {
       const [, a, b, c, d, e] = parts;
 
       if (a === "login") return json({ ok: true });
+
+      /* reuniões: gravação, transcrição, resumo e checklist */
+      if (a === "meet") return await meetAdmin(req, env, db, parts.slice(2), url);
 
       /* lê um texto livre (briefing) e devolve os campos da peça */
       if (a === "parse" && method === "POST") {
