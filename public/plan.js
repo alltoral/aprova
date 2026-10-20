@@ -333,7 +333,7 @@ function plansAdmin() {
       ${progressBar(p)}
       <div class="pl-n"><span><b>${cnt("aprovado")}</b> aprovadas</span><span><b>${planOpen(p)}</b> aguardando</span><span><b>${cnt("alteracao")}</b> ajustes</span><span><b>${cnt("reprovado")}</b> repensar</span>${p.deadline ? `<span>Prazo ${esc(fmtDeadline(p.deadline))}</span>` : ""}</div>
       ${asks.length ? `<div class="pl-asks">${asks.slice(0, 3).map(i => `<div><b>${esc(i.title)}</b>${i.review?.note ? `<p>“${esc(i.review.note)}”</p>` : `<p class="muted">${esc(IDEA_ST[ideaSt(i)].label)}</p>`}</div>`).join("")}</div>` : ""}
-      <div class="rq-a"><button class="btn sm pri" data-act="plan-edit" data-id="${p.id}">Abrir e editar</button><button class="btn sm" data-act="plan-preview" data-id="${p.id}">Ver como o cliente</button>${p.visible !== false ? `<button class="btn sm" data-act="copy-link" data-link="${esc(location.origin + "/c/" + (c.token || "") + "/planejamento")}" data-msg="Link do planejamento copiado">Copiar link</button>` : ""}<button class="link ${S.armed === "pl" + p.id ? "danger" : ""}" data-act="plan-del" data-id="${p.id}">${S.armed === "pl" + p.id ? "confirmar exclusão" : "Excluir"}</button></div></article>`;
+      <div class="rq-a"><button class="btn sm pri" data-act="plan-edit" data-id="${p.id}">Abrir e editar</button><button class="btn sm" data-act="plan-preview" data-id="${p.id}">Ver como o cliente</button><button class="btn sm ${planOpen(p) || !(p.ideas || []).length ? "" : "dark"}" data-act="plan-dl" data-id="${p.id}" title="Baixar as ideias, legendas e pedidos do cliente">↓ Baixar</button>${p.visible !== false ? `<button class="btn sm" data-act="copy-link" data-link="${esc(location.origin + "/c/" + (c.token || "") + "/planejamento")}" data-msg="Link do planejamento copiado">Copiar link</button>` : ""}<button class="link ${S.armed === "pl" + p.id ? "danger" : ""}" data-act="plan-del" data-id="${p.id}">${S.armed === "pl" + p.id ? "confirmar exclusão" : "Excluir"}</button></div></article>`;
   };
   return `<section class="reqs plans-a pl-fill"><div class="section-h"><h2>Plane<em>jamento</em></h2><span class="eyebrow">${list.length ? `${list.length} ${list.length === 1 ? "planejamento" : "planejamentos"} · padrão ${esc((PERIODS[c.planPeriod] || PERIODS.semanal).tag.toLowerCase())}` : "Aprovação de ideias e legendas antes da arte"}</span></div>
     ${list.length ? `<div class="rq-list">${list.map(card).join("")}</div>` : `<div class="pl-empty"><p>Suba o planejamento da semana, quinzena ou mês. O cliente aprova as ideias e legendas antes da gente criar as artes.</p><button class="btn yel" data-act="plan-new">+ Novo planejamento</button></div>`}</section>`;
@@ -539,6 +539,7 @@ function planClick(a, b) {
     case "goto-new": closeSheet(); setTimeout(() => document.getElementById("artes-novas")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); break;
     /* estúdio */
     case "plan-new": S.open = null; S.editor = newPlanEditor(); renderSheet(); break;
+    case "plan-dl": planDownload(b.dataset.id); break;
     case "plan-edit": { const p = (S.plans || []).find(x => x.id === b.dataset.id); if (p) { S.editor = { kind: "plan", step: "conferir", id: p.id, sheetCls: "sheet-plan-a", data: JSON.parse(JSON.stringify(p)), openIdx: null }; renderSheet(); } break; }
     case "plan-preview": openPlanView(b.dataset.id); break;
     case "plan-del": { const id = b.dataset.id; if (S.armed !== "pl" + id) { S.armed = "pl" + id; S.editor ? renderSheet() : render(); break; }
@@ -583,3 +584,52 @@ document.addEventListener("touchend", ev => {
   if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) || S.isOwner || S.editor?.kind !== "planview" || S.editor.ask) return;
   if (dx > 0) decideIdea("aprovado"); else { S.editor.ask = "reprovado"; S.editor.chips = []; renderSheet(); }
 }, { passive: true });
+
+/* ---------- baixar o planejamento (estúdio): texto pronto para criar as artes ---------- */
+const ST_DL = { pendente: "AGUARDANDO O CLIENTE", aprovado: "APROVADO", alteracao: "AJUSTE PEDIDO", reprovado: "REPENSAR", ajustado: "AJUSTE FEITO, AGUARDANDO O CLIENTE" };
+function ideaDay(d) { if (!d) return "sem data"; const t = new Date(d.length <= 10 ? d + "T12:00" : d); if (isNaN(t)) return d; return `${DOW[t.getDay()]} ${pad2(t.getDate())}/${pad2(t.getMonth() + 1)}${d.length > 10 ? ` às ${pad2(t.getHours())}h${pad2(t.getMinutes())}` : ""}`; }
+const FMT_ORDER = ["Carrossel", "Post", "Reels", "Stories", "Anúncio"];
+const FMT_PLURAL = { Post: "Posts", Carrossel: "Carrosséis", Reels: "Reels", Stories: "Stories", "Anúncio": "Anúncios" };
+function planText(p) {
+  const c = S.client || {}; const ideas = p.ideas || []; const cnt = st => ideas.filter(i => ideaSt(i) === st).length;
+  /* numera por formato, na ordem das datas: Carrossel 1, Carrossel 2, Reels 1… */
+  const seen = {}; const tagged = ideas.map(i => { seen[i.format] = (seen[i.format] || 0) + 1; return { i, label: `${i.format} ${seen[i.format]}` }; });
+  const L = [];
+  L.push(`# Planejamento ${(PERIODS[p.period] || PERIODS.semanal).tag.toLowerCase()} · ${c.name || ""}`, "");
+  L.push(`- **Período:** ${fmtRange(p.start, p.end)}`);
+  if (p.deadline) L.push(`- **Prazo de aprovação:** ${fmtDeadline(p.deadline)}`);
+  L.push(`- **Conteúdos:** ${ideas.length} (${FMT_ORDER.filter(f => seen[f]).map(f => `${seen[f]} ${seen[f] === 1 ? f.toLowerCase() : FMT_PLURAL[f].toLowerCase()}`).join(", ")})`);
+  L.push(`- **Situação:** ${cnt("aprovado")} aprovados · ${cnt("alteracao")} com ajuste pedido · ${cnt("reprovado")} para repensar · ${planOpen(p)} aguardando o cliente`);
+  L.push(`- **Baixado em:** ${fmtStamp(new Date().toISOString())}`);
+  if (p.note) L.push("", "## Recado do planejamento", "", p.note);
+  L.push("", "> Para criar as artes: use os conteúdos com status APROVADO. A legenda já está com os ajustes que o cliente pediu. Os que estão com AJUSTE PEDIDO ou REPENSAR ainda precisam ser revistos antes da arte.");
+  /* índice na ordem de publicação */
+  L.push("", "## Calendário", "", "| Data | Conteúdo | Título | Status |", "|---|---|---|---|");
+  tagged.forEach(({ i, label }) => L.push(`| ${ideaDay(i.date)} | ${label} | ${String(i.title).replace(/\|/g, "/")} | ${ST_DL[ideaSt(i)] || ideaSt(i)} |`));
+  /* um bloco por formato, cada conteúdo separado */
+  FMT_ORDER.filter(f => seen[f]).forEach(f => {
+    L.push("", "", `# ${FMT_PLURAL[f]} (${seen[f]})`);
+    tagged.filter(t => t.i.format === f).forEach(({ i, label }) => {
+      const st = ideaSt(i); const r = i.review || {};
+      L.push("", "---", "", `## ${label} · ${i.title}`, "");
+      L.push(`- **Data:** ${ideaDay(i.date)}`);
+      L.push(`- **Status:** ${ST_DL[st] || st}`);
+      if (i.idea) L.push("", "### Ideia", "", i.idea);
+      if (i.caption) L.push("", "### Legenda", "", i.caption);
+      if (i.hashtags) L.push("", "### Hashtags", "", i.hashtags);
+      const said = (r.history || []).filter(h => h.note && h.note !== "Ajuste feito pelo estúdio");
+      if (said.length) { L.push("", "### Conversa com o cliente", ""); said.forEach(h => L.push(`- **${h.byLabel || "Cliente"}** (${fmtStamp(h.at)}, ${IDEA_ST[h.status]?.label || h.status}): ${h.note.replace(/\n+/g, " ")}`)); }
+      else if (r.note && st !== "aprovado") L.push("", `**Pedido do cliente:** ${r.note}`);
+    });
+  });
+  return L.join("\n") + "\n";
+}
+function planDownload(id) {
+  const p = (S.plans || []).find(x => x.id === id); if (!p) return;
+  const slug = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const blob_ = new Blob([planText(p)], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob_);
+  a.download = `planejamento-${slug(S.client?.name)}-${slug(p.start || p.period)}.md`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast("Planejamento baixado");
+}
