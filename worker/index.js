@@ -1065,6 +1065,16 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           await db.setJSON(`posts/${b}/${post.id}`, post);
           return json({ post });
         }
+        /* envia todos os rascunhos de uma vez para o cliente aprovar */
+        if (c === "posts" && d === "send-drafts" && method === "POST") {
+          const body = await readBody(req);
+          const only = Array.isArray(body.ids) ? new Set(body.ids.filter(safeId)) : null;
+          const drafts = (await listJSON(db, `posts/${b}/`)).filter((p) => p.visible === false && (!only || only.has(p.id)));
+          if (!drafts.length) return fail("Não tem nenhum rascunho para enviar.");
+          const at = now();
+          for (const p of drafts) { p.visible = true; p.sentAt = p.sentAt || at; p.updatedAt = at; await db.setJSON(`posts/${b}/${p.id}`, p); }
+          return json({ posts: drafts, sent: drafts.length });
+        }
         if (c === "posts" && safeId(d)) {
           const key = `posts/${b}/${d}`;
           const prev = await db.get(key, { type: "json" });
@@ -1137,10 +1147,11 @@ export default {
       const m = /^\/api\/admin\/clients\/([^/]+)\/(posts|plans|projects|guide)(\/|$)/.exec(url.pathname);
       if (m && res.ok && (req.method === "POST" || req.method === "PUT") && ctx?.waitUntil) {
         try {
-          const item = pushItemFrom(m[2], await res.clone().json());
-          if (item) {
+          const data = await res.clone().json();
+          const items = Array.isArray(data?.posts) ? data.posts.map((post) => pushItemFrom(m[2], { post })).filter(Boolean) : [pushItemFrom(m[2], data)].filter(Boolean);
+          if (items.length) {
             const db = makeStore(env.DB, "db");
-            ctx.waitUntil(db.get(`clients/${m[1]}`, { type: "json" }).then((client) => queuePush(db, client, item, url.origin)).catch(() => {}));
+            ctx.waitUntil(db.get(`clients/${m[1]}`, { type: "json" }).then((client) => queuePush(db, client, items, url.origin)).catch(() => {}));
           }
         } catch { /* resposta sem JSON */ }
       }

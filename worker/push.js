@@ -121,8 +121,9 @@ export async function queuePush(db, client, item, origin) {
   const key = `push/q/${client.id}`;
   const q = (await db.get(key, { type: "json" })) || { items: [] };
   const mine = Date.now() + Math.random();
-  const items = (Date.now() - (q.first || 0) < 120000 ? q.items : []).filter((x) => !(x.kind === item.kind && x.id === item.id));
-  items.push(item);
+  const add = Array.isArray(item) ? item : [item];
+  const items = (Date.now() - (q.first || 0) < 120000 ? q.items : []).filter((x) => !add.some((y) => x.kind === y.kind && x.id === y.id));
+  items.push(...add);
   await db.setJSON(key, { items: items.slice(-40), at: mine, first: items.length > 1 ? q.first : Date.now() });
   await sleep(WAIT);
   const now = await db.get(key, { type: "json" });
