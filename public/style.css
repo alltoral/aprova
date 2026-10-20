@@ -1147,3 +1147,14 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .pushbar.own>span:not(.pb-ic){color:inherit;flex:1;font-size:13.5px}
 .pb-ic{font-size:18px;flex:none}
 @media (max-width:620px){.pushbar:not(.on):not(.own){flex-wrap:wrap}.pushbar .pb-acts{flex-direction:row;width:100%;justify-content:flex-start;gap:14px;padding-left:68px}.pushbar.own{flex-wrap:wrap}}
+/* seções que abrem e fecham (painel do estúdio) */
+.section-h .sec-tg{flex:none;align-self:center;width:34px;height:34px;border-radius:50%;border:1px solid var(--line,#ecd9e3);background:#fff;display:grid;place-items:center;cursor:pointer;padding:0;transition:background .15s,transform .2s}
+.section-h .sec-tg svg{width:18px;height:18px;fill:none;stroke:var(--pink-deep,#c2327a);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.section-h .sec-tg:hover{background:var(--surface,#fbf2f7)}
+.foldable>.section-h{justify-content:flex-start}
+.foldable>.section-h h2{margin-right:auto;cursor:pointer}
+.foldable.folded>.section-h .sec-tg svg{transform:rotate(-90deg)}
+.foldable.folded>:not(.section-h){display:none!important}
+.foldable.folded>.section-h{margin-bottom:6px;padding-bottom:12px;border-bottom:1px dashed var(--line,#ecd9e3)}
+.foldable.folded>.section-h h2{opacity:.7}
+@media (prefers-reduced-motion: reduce){.section-h .sec-tg svg{transition:none}}
