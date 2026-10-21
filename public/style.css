@@ -1186,3 +1186,4 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .phone.story .ig-stk{z-index:3}
 .st-txt{max-width:340px;margin:10px auto 0;font-size:13.5px;background:var(--surface,#fbf7f9);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .st-txt p{white-space:pre-wrap;margin-top:4px;color:var(--muted)}
+.st-empty{color:var(--muted);font-size:14px;padding:4px 0 18px}
