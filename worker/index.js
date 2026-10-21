@@ -127,6 +127,7 @@ function cleanPost(body, prev, clientId) {
     network,
     sponsored,
     format: FORMATS.includes(body.format) ? body.format : "4x5",
+    story: typeof body.story === "boolean" ? body.story : typeof prev?.story === "boolean" ? prev.story : null,
     title: str(body.title, 160) || (sponsored ? "Anúncio sem título" : "Post sem título"),
     date: str(body.date, 20),
     media,

@@ -1159,3 +1159,30 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .foldable.folded>.section-h h2{opacity:.7}
 @media (prefers-reduced-motion: reduce){.section-h .sec-tg svg{transition:none}}
 .gv-fold>.section-h{margin-top:28px}
+/* stories: seção própria, cards 9:16 e prévia em tela cheia */
+.stories-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;padding-bottom:24px}
+@media (max-width:520px){.stories-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
+.pcard.story .thumb{aspect-ratio:9/16}
+.pcard.story .thumb .sticker{width:56%}
+.badge.story{background:linear-gradient(45deg,#f9ce34,#ee2a7b 55%,#6228d7);color:#fff;border-color:transparent}
+.phone.story{max-width:340px;background:#000;border-color:#000;border-radius:26px;margin-inline:auto}
+.st-media{background:#111}
+.st-media img.art{object-fit:cover}
+.st-media video.art{object-fit:cover}
+.st-top{position:absolute;inset:0 0 auto;padding:10px 10px 26px;background:linear-gradient(rgba(0,0,0,.45),transparent);z-index:2;pointer-events:none}
+.st-bars{display:flex;gap:3px}
+.st-bars i{flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.4)}
+.st-bars i.done,.st-bars i.on{background:#fff}
+.st-h{display:flex;align-items:center;gap:8px;margin-top:9px;color:#fff;font-size:13px}
+.st-h b{font-weight:600}
+.st-h small{opacity:.7;font-size:12px}
+.st-av{width:28px;height:28px;border-radius:50%;overflow:hidden;background:#fff;display:grid;place-items:center;flex:none;box-shadow:0 0 0 1.5px rgba(255,255,255,.9)}
+.st-av img{width:100%;height:100%;object-fit:cover}
+.st-av b{color:#111;font-size:11px}
+.st-foot{position:absolute;inset:auto 0 0;display:flex;align-items:center;gap:12px;padding:12px 12px 14px;background:linear-gradient(transparent,rgba(0,0,0,.45));z-index:2;pointer-events:none}
+.st-foot span{flex:1;border:1px solid rgba(255,255,255,.7);border-radius:999px;color:#fff;font-size:13px;padding:8px 14px}
+.st-foot svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.phone.story .ig-nav{z-index:3}
+.phone.story .ig-stk{z-index:3}
+.st-txt{max-width:340px;margin:10px auto 0;font-size:13.5px;background:var(--surface,#fbf7f9);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.st-txt p{white-space:pre-wrap;margin-top:4px;color:var(--muted)}
