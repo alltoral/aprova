@@ -1,3 +1,4 @@
+import { accessPublic, accessFull, accessSave, accessDelete } from "./vault.js";
 import { meetAdmin, meetCron } from "./meet.js";
 import { vapid, cleanSub, saveSub, dropSub, countSubs, pushClient, queuePush, pushItemFrom } from "./push.js";
 
@@ -439,6 +440,14 @@ async function handle(req, env) {
       const client = await db.get(`clients/${ref.clientId}`, { type: "json" });
       if (!client || client.token !== t) return fail("Este link não existe mais. Peça ao estúdio o link atualizado.", 404);
 
+      /* acesso às redes: o cliente envia; a senha nunca volta para a página dele */
+      if (method === "POST" && (parts[2] === "access" || parts[2] === "access-del") && parts.length === 3) {
+        const body = await readBody(req);
+        try {
+          const a = parts[2] === "access" ? await accessSave(db, client.id, body, str(body.name, 80).trim() || client.name, rid) : await accessDelete(db, client.id, String(body.id || ""));
+          return json({ access: accessPublic(a) });
+        } catch (e) { return fail(e.message); }
+      }
       /* o celular do cliente ativa ou desativa os avisos */
       if (method === "POST" && (parts[2] === "push-sub" || parts[2] === "push-unsub") && parts.length === 3) {
         const body = await readBody(req);
@@ -457,7 +466,8 @@ async function handle(req, env) {
         const g = await db.get(`guides/${client.id}`, { type: "json" });
         const guide = g && g.visible !== false ? g : null;
         const visits = await touchVisit(db, client);
-        return json({ client: publicClient(client), posts, requests, plans, projects, guide, visits: { prev: visits.prev, welcomed: !!client.welcomedAt } });
+        const access = accessPublic(await db.get(`access/${client.id}`, { type: "json" }));
+        return json({ client: publicClient(client), posts, requests, plans, projects, guide, access, visits: { prev: visits.prev, welcomed: !!client.welcomedAt } });
       }
       /* ---------- produtos digitais: aprovação e marcações do cliente ---------- */
       if (method === "POST" && parts[2] && parts[2].startsWith("project-") && parts.length === 3) {
@@ -844,7 +854,15 @@ ${caption ? "Legenda do post: " + caption : "O post ainda não tem legenda."}`;
           const plans = sortPlans(await listJSON(db, `plans/${b}/`));
           const projects = sortProjects(await listJSON(db, `projects/${b}/`));
           const guide = await db.get(`guides/${b}`, { type: "json" });
-          return json({ client, posts, requests, plans, projects, guide, pushDevices: await countSubs(db, b) });
+          return json({ client, posts, requests, plans, projects, guide, pushDevices: await countSubs(db, b), access: accessPublic(await db.get(`access/${b}`, { type: "json" })) });
+        }
+        /* acessos das redes (estúdio vê a senha) */
+        if (c === "access") {
+          try {
+            if (!d && method === "GET") return json({ access: await accessFull(db, await db.get(`access/${b}`, { type: "json" })) });
+            if (!d && method === "POST") return json({ access: await accessFull(db, await accessSave(db, b, await readBody(req), "ALL TORAL", rid)) });
+            if (d && method === "DELETE") return json({ access: await accessFull(db, await accessDelete(db, b, d)) });
+          } catch (e) { return fail(e.message); }
         }
         /* aviso de teste no celular do cliente */
         if (c === "push-test" && method === "POST") {
