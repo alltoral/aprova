@@ -29,27 +29,24 @@ const acHas = net => acList().some(x => x.net === net);
 
 /* ---------- card na página do cliente ---------- */
 function accessCard(c) {
-  if (S.isOwner || !c || !hasSocial(c)) return "";
+  if (!c || (!hasSocial(c) && !acList().length)) return "";
   const want = acWanted(c).filter(k => k !== "meta"); const list = acList();
   const missing = want.filter(k => !acHas(k));
   const done = list.length && !missing.length;
   const chips = [...new Set([...want, ...list.map(x => x.net)])].map(k => { const ok = acHas(k); return `<span class="ac-chip ${ok ? "ok" : ""}">${acDot(k, true)}${esc(AC_NETS[k]?.name || k)}<i aria-hidden="true">${ok ? "✓" : ""}</i></span>`; }).join("");
   return `<section class="ac-card ${done ? "done" : ""}">
     <div class="ac-art" aria-hidden="true"><img src="/larot.png" alt="" width="74"><span class="ac-lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="16" r="1.4"/></svg></span></div>
-    <div class="ac-txt"><span class="eyebrow">${done ? "Tudo certo por aqui" : "Para a gente cuidar do seu perfil"}</span>
-      <h2>Acesso às suas <em>redes</em></h2>
-      <p>${done ? "Recebemos os acessos. Se trocar alguma senha, atualize aqui para a gente não ficar sem entrar." : "Envie o login e a senha das suas redes. Fica guardado com criptografia e só o nosso time vê."}</p>
+    <div class="ac-txt"><span class="eyebrow">${S.isOwner ? "Acessos do cliente" : done ? "Tudo certo por aqui" : "Para a gente cuidar do seu perfil"}</span>
+      <h2>Acesso às ${S.isOwner ? "" : "suas "}<em>redes</em></h2>
+      <p>${S.isOwner ? (list.length ? `${list.length} ${list.length === 1 ? "acesso enviado" : "acessos enviados"}${missing.length ? `. Ainda falta ${missing.map(k => AC_NETS[k]?.name || k).join(", ")}.` : ". Tudo certo."}` : "O cliente ainda não enviou os acessos. Ele envia pela página dele. Se mandar por outro canal, adicione aqui.") : done ? "Recebemos os acessos. Se trocar alguma senha, atualize aqui para a gente não ficar sem entrar." : "Envie o login e a senha das suas redes. Fica guardado com criptografia e só o nosso time vê."}</p>
       <div class="ac-chips">${chips}</div></div>
-    <button class="btn ${done ? "" : "yel"} ac-go" data-act="ac-open">${done ? "Atualizar acessos" : list.length ? `Falta ${missing.length === 1 ? "1 rede" : missing.length + " redes"}` : "Enviar acessos"} →</button>
+    <button class="btn ${done ? "" : "yel"} ac-go" data-act="ac-open">${S.isOwner ? (list.length ? "Ver acessos" : "Adicionar acesso") : done ? "Atualizar acessos" : list.length ? `Falta ${missing.length === 1 ? "1 rede" : missing.length + " redes"}` : "Enviar acessos"} →</button>
   </section>`;
 }
 
 /* ---------- área do estúdio no painel ---------- */
-function accessAdmin(c) {
-  if (!S.isOwner || !c) return "";
-  const list = acList();
-  if (!list.length && !hasSocial(c)) return "";
-  const rows = list.map(x => {
+function acRowsOwner() {
+  return acList().map(x => {
     const shown = S.acShow?.has(x.id); const full = S.acFull?.[x.id];
     return `<div class="ac-row">${acDot(x.net)}<div class="ac-r-t"><b>${esc(acName(x))}</b><small>Enviado por ${esc(x.by || "cliente")} · ${esc(fmtStamp(x.at))}</small></div>
       <div class="ac-cred"><span class="ac-k">Login</span><code>${esc(x.login)}</code><button class="link" data-act="ac-copy" data-v="login" data-id="${x.id}">Copiar</button></div>
@@ -57,10 +54,6 @@ function accessAdmin(c) {
       ${x.note ? `<p class="ac-note">${esc(x.note)}</p>` : ""}
       <div class="ac-r-a"><button class="btn sm ghost" data-act="ac-edit" data-id="${x.id}">Editar</button><button class="link ${S.armed === "ac" + x.id ? "danger" : ""}" data-act="ac-del" data-id="${x.id}">${S.armed === "ac" + x.id ? "Confirmar: apagar" : "Apagar"}</button></div></div>`;
   }).join("");
-  const missing = acWanted(c).filter(k => k !== "meta" && !acHas(k));
-  return `<section class="ac-sec"><div class="section-h"><h2>Acessos das <em>redes</em></h2><div class="actions"><span class="eyebrow">${list.length ? `${list.length} ${list.length === 1 ? "acesso" : "acessos"}` : "Nenhum ainda"}${missing.length ? ` · falta ${missing.map(k => AC_NETS[k].name).join(", ")}` : ""}</span><button class="btn sm pri" data-act="ac-new">+ Adicionar acesso</button></div></div>
-    ${list.length ? `<div class="ac-rows">${rows}</div>` : `<p class="st-empty">O cliente ainda não enviou os acessos. Ele envia pela página dele, no card <b>Acesso às suas redes</b>. Se ele mandar por outro canal, adicione aqui.</p>`}
-  </section>`;
 }
 
 /* ---------- janela de preencher ---------- */
@@ -79,13 +72,13 @@ function accessSheet() {
       ${e.err ? `<p class="err">${esc(e.err)}</p>` : ""}
       <div class="ac-acts"><button class="btn pri" data-act="ac-save" ${S.busy ? "disabled" : ""}>${S.busy ? "Salvando…" : editing ? "Salvar alteração" : "Salvar acesso"}</button>${list.length ? `<button class="btn ghost" data-act="ac-back">Voltar</button>` : ""}</div>
     </div>` : "";
-  const saved = !e.form ? `<div class="ac-saved">${list.map(x => `<div class="ac-s">${acDot(x.net)}<div><b>${esc(acName(x))}</b><small>${esc(x.login)} · senha ${x.hasPass ? "enviada" : "não enviada"}</small></div><button class="btn sm ghost" data-act="ac-edit" data-id="${x.id}">Atualizar</button>${owner ? "" : `<button class="link ${S.armed === "ac" + x.id ? "danger" : ""}" data-act="ac-del" data-id="${x.id}">${S.armed === "ac" + x.id ? "Confirmar" : "Remover"}</button>`}</div>`).join("")}
+  const saved = !e.form && owner ? `<div class="ac-saved own">${acRowsOwner()}<button class="ac-add" data-act="ac-add"><span>+</span>Adicionar acesso</button></div>` : !e.form ? `<div class="ac-saved">${list.map(x => `<div class="ac-s">${acDot(x.net)}<div><b>${esc(acName(x))}</b><small>${esc(x.login)} · senha ${x.hasPass ? "enviada" : "não enviada"}</small></div><button class="btn sm ghost" data-act="ac-edit" data-id="${x.id}">Atualizar</button>${owner ? "" : `<button class="link ${S.armed === "ac" + x.id ? "danger" : ""}" data-act="ac-del" data-id="${x.id}">${S.armed === "ac" + x.id ? "Confirmar" : "Remover"}</button>`}</div>`).join("")}
       <button class="ac-add" data-act="ac-add"><span>+</span>Adicionar outra rede</button></div>` : "";
-  return `<div class="modal ac-modal" role="dialog" aria-modal="true" aria-labelledby="ach">
+  return `<div class="modal ac-modal ${owner ? "own" : ""}" role="dialog" aria-modal="true" aria-labelledby="ach">
     <button class="x" data-act="close" aria-label="Fechar">✕</button>
     <div class="ac-mh"><span class="ac-lock big" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="16" r="1.4"/></svg></span>
-      <h2 id="ach">Acesso às ${owner ? "redes do cliente" : "suas <em>redes</em>"}</h2>
-      <p>${owner ? "Cadastre um acesso que o cliente mandou por outro canal." : "Guardamos com criptografia. Depois de salvar, a senha não aparece mais aqui, nem para você. Só o time do ALL TORAL consegue ver."}</p></div>
+      <h2 id="ach">Acesso às ${owner ? "<em>redes</em> do cliente" : "suas <em>redes</em>"}</h2>
+      <p>${owner ? (e.form ? "Cadastre um acesso que o cliente mandou por outro canal." : "Só quem entra no painel vê as senhas. Toque em Mostrar ou Copiar.") : "Guardamos com criptografia. Depois de salvar, a senha não aparece mais aqui, nem para você. Só o time do ALL TORAL consegue ver."}</p></div>
     ${saved}${form}
   </div>`;
 }
@@ -93,7 +86,7 @@ function acOpen(id) {
   const list = acList(); const x = id ? list.find(y => y.id === id) : null;
   const first = !x && !list.length ? acWanted(S.client).find(k => !acHas(k)) || "instagram" : x ? x.net : acWanted(S.client).find(k => k !== "meta" && !acHas(k)) || "";
   S.open = null;
-  S.editor = { kind: "access", sheetCls: "sheet-c", form: !!x || !list.length, data: x ? { id: x.id, net: x.net, label: x.label, login: x.login, note: x.note, pass: "" } : { net: first, login: "", pass: "", note: "", label: "" }, see: false, err: "" };
+  S.editor = { kind: "access", sheetCls: "sheet-c", wide: S.isOwner, form: !!x || !list.length, data: x ? { id: x.id, net: x.net, label: x.label, login: x.login, note: x.note, pass: "" } : { net: first, login: "", pass: "", note: "", label: "" }, see: false, err: "" };
   renderSheet();
   if (S.editor.form) setTimeout(() => document.querySelector('[data-ac="login"]')?.focus({ preventScroll: true }), 40);
 }
@@ -137,8 +130,9 @@ function accessClick(a, b) {
     case "ac-see": e.see = !e.see; renderSheet(); break;
     case "ac-save": acSave(); break;
     case "ac-show": { const id = b.dataset.id; S.acShow = S.acShow || new Set();
-      if (S.acShow.has(id)) { S.acShow.delete(id); render(); break; }
-      (S.acFull && id in S.acFull ? Promise.resolve() : acFetchFull()).then(() => { S.acShow.add(id); render(); }).catch(x => toast(x.message)); break; }
+      const re = () => S.editor?.kind === "access" ? renderSheet() : render();
+      if (S.acShow.has(id)) { S.acShow.delete(id); re(); break; }
+      (S.acFull && id in S.acFull ? Promise.resolve() : acFetchFull()).then(() => { S.acShow.add(id); re(); }).catch(x => toast(x.message)); break; }
     case "ac-copy": acCopy(b.dataset.id, b.dataset.v); break;
     case "ac-del": { const id = b.dataset.id; if (S.armed !== "ac" + id) { S.armed = "ac" + id; S.editor ? renderSheet() : render(); break; } S.armed = null;
       (S.isOwner ? api(`/api/admin/clients/${S.clientId}/access/${id}`, { method: "DELETE" }) : api(`/api/c/${S.token}/access-del`, { method: "POST", body: { id } }))

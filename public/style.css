@@ -1254,3 +1254,4 @@ img.lk{display:block;height:auto;max-width:100%;pointer-events:none;-webkit-user
 .ac-cred code.mask{letter-spacing:.12em;color:var(--muted)}
 .ac-note{grid-column:1/-1;font-size:13px;color:var(--muted);background:#fffbe0;border-radius:10px;padding:8px 10px}
 .ac-r-a{grid-column:1/-1;display:flex;gap:12px;align-items:center}
+.ac-saved.own{gap:10px}.ac-saved.own .ac-row{padding:14px}.ac-modal.own{max-width:520px}
